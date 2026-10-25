@@ -287,15 +287,32 @@ export async function loadExperience(): Promise<Experience> {
   }
 }
 
+/** The experience with nothing published: every section falls back to its placeholder. */
+const EMPTY_EXPERIENCE: Experience = {
+  chapters: CHAPTER_DEFAULTS,
+  milestones: [],
+  memories: [],
+  people: [],
+  wishes: [],
+  letters: [],
+  opening: DEFAULT_OPENING,
+  finale: DEFAULT_FINALE,
+  times: null,
+  music: null,
+  media: {},
+}
+
 // Signed URLs last an hour; refresh well before that for visitors who linger.
 const RESIGN_EVERY_MS = 45 * 60 * 1000
 
-export function useExperienceData() {
-  const [data, setData] = useState<Experience | null>(null)
+/** `peek` never touches the database, so the public sneak peek cannot reveal any content. */
+export function useExperienceData(peek = false) {
+  const [data, setData] = useState<Experience | null>(peek ? EMPTY_EXPERIENCE : null)
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (peek) return
     let active = true
     loadExperience()
       .then(async (exp) => {
@@ -308,7 +325,7 @@ export function useExperienceData() {
     return () => {
       active = false
     }
-  }, [])
+  }, [peek])
 
   useEffect(() => {
     if (!data) return
@@ -326,6 +343,8 @@ type ExperienceContextValue = {
   urls: Record<string, string>
   /** Curator preview: empty sections show labelled placeholders that Roni never sees. */
   preview: boolean
+  /** Public sneak peek before launch: placeholders only, no curator links. */
+  peek: boolean
   /** Roni herself, who can carry on in her personal archive. */
   roni: boolean
 }

@@ -136,6 +136,7 @@ There is no test data in the project: all QA accounts, contributors, submissions
 ## Known notes
 
 - **Supabase advisors** report three intentional security warnings: `rate_limits` has RLS with no policies (server-only by design); `experience_access()` is a `SECURITY DEFINER` function callable by anyone (it only returns gate state); `ensure_my_collection()` is `SECURITY DEFINER` and checks the role itself. Performance notes (unindexed `*_by` foreign keys, multiple permissive policies) don't matter at this scale.
+- **Temporary:** the countdown has an *Explore now* button that opens a public sneak peek of the experience. It loads no data at all (every section shows a "Sneak peek · placeholder" card), so it can't reveal contributions. To remove it, drop the `onExplore` prop passed to `GatePage` in `src/features/experience/HomePage.tsx`.
 - The Supabase CLI isn't installed here, so edge functions were deployed through the Supabase MCP. The deployed `contribute` function (version 3) matches `supabase/functions/contribute`.
 - Consider turning on *Leaked password protection* (Authentication → Sign In / Providers → Email) for curator and Roni accounts.
 - Lint reports warnings only (mostly `set-state-in-effect` in data-loading effects); no errors.

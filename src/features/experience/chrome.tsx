@@ -123,6 +123,18 @@ export function MusicButton() {
   )
 }
 
+export function PeekBanner({ onExit }: { onExit: () => void }) {
+  return (
+    <div className="fixed right-3 bottom-3 z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full border border-dashed border-gold/50 bg-midnight/90 px-4 py-2 text-xs leading-relaxed text-ivory/85 backdrop-blur sm:right-4 sm:bottom-4 sm:block sm:max-w-xs sm:rounded-2xl sm:py-3">
+      <p className="font-medium tracking-[0.2em] text-gold uppercase">Sneak peek</p>
+      <p className="mt-1 hidden sm:block">Placeholders only. The real archive opens on her birthday.</p>
+      <button type="button" onClick={onExit} className="cursor-pointer text-gold underline underline-offset-4 sm:mt-2">
+        Back to the countdown
+      </button>
+    </div>
+  )
+}
+
 export function PreviewBanner({ live }: { live: boolean }) {
   const { settings } = useSiteSettings()
   return (

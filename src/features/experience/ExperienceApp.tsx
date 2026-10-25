@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { Spinner } from '@/components/ui/Spinner'
 import { Archive } from './Archive'
-import { MusicButton, PreviewBanner } from './chrome'
+import { MusicButton, PeekBanner, PreviewBanner } from './chrome'
 import { ExperienceContext, useExperienceData } from './data'
 import { Opening } from './Opening'
 
-export function ExperienceApp({ preview, live, roni }: { preview: boolean; live: boolean; roni: boolean }) {
-  const { data, urls, error } = useExperienceData()
+type Props = { preview: boolean; live: boolean; roni: boolean; onExitPeek?: () => void }
+
+/** With `onExitPeek` this is the public sneak peek: no data is loaded, only placeholders. */
+export function ExperienceApp({ preview, live, roni, onExitPeek }: Props) {
+  const peek = Boolean(onExitPeek)
+  const { data, urls, error } = useExperienceData(peek)
   const [entered, setEntered] = useState(false)
 
   if (error)
@@ -26,7 +30,7 @@ export function ExperienceApp({ preview, live, roni }: { preview: boolean; live:
     )
 
   return (
-    <ExperienceContext value={{ data, urls, preview, roni }}>
+    <ExperienceContext value={{ data, urls, preview: preview || peek, peek, roni }}>
       {entered ? (
         <Archive />
       ) : (
@@ -38,7 +42,7 @@ export function ExperienceApp({ preview, live, roni }: { preview: boolean; live:
         />
       )}
       <MusicButton />
-      {preview && <PreviewBanner live={live} />}
+      {onExitPeek ? <PeekBanner onExit={onExitPeek} /> : preview && <PreviewBanner live={live} />}
     </ExperienceContext>
   )
 }

@@ -10,7 +10,9 @@ import { formatInLagos, useCountdown, useSiteSettings } from '@/lib/launch'
  * Public landing. Shows only the launch schedule. It never loads archive content: that is
  * fetched (and authorised by row-level security) only inside the experience.
  */
-export function GatePage({ access, onLaunch }: { access: ExperienceAccess; onLaunch?: () => void }) {
+type Props = { access: ExperienceAccess; onLaunch?: () => void; onExplore?: () => void }
+
+export function GatePage({ access, onLaunch, onExplore }: Props) {
   const auth = useAuth()
   const { settings } = useSiteSettings()
   const countdown = useCountdown(settings?.launch_at ?? null)
@@ -103,6 +105,17 @@ export function GatePage({ access, onLaunch }: { access: ExperienceAccess; onLau
           )}
         </motion.div>
 
+        {onExplore && countdown && !countdown.done && (
+          <motion.div {...fade(1.1)} className="mt-10">
+            <button
+              type="button"
+              onClick={onExplore}
+              className="min-h-11 cursor-pointer rounded-full border border-gold/40 px-5 text-xs tracking-[0.28em] text-ivory/85 uppercase transition-colors hover:border-gold hover:text-gold-bright"
+            >
+              Explore now
+            </button>
+          </motion.div>
+        )}
         {open && !access.signed_in && (
           <motion.div {...fade(1.1)} className="mt-10">
             <Link to="/sign-in?next=/" className="text-sm tracking-[0.28em] text-ivory uppercase hover:text-gold-bright">

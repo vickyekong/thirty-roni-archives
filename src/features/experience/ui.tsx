@@ -47,8 +47,15 @@ export function PreviewEmpty({
   to: string
   note?: string
 }) {
-  const { preview } = useExperience()
+  const { preview, peek } = useExperience()
   if (!preview) return null
+  if (peek)
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-grey/50 px-6 py-8 text-center">
+        <p className="text-[0.625rem] tracking-[0.3em] text-grey uppercase">Sneak peek · placeholder</p>
+        <p className="mt-3 text-sm leading-relaxed text-ivory/80">Real memories from family and friends will appear here on her birthday.</p>
+      </div>
+    )
   return (
     <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-grey/50 px-6 py-8 text-center">
       <p className="text-[0.625rem] tracking-[0.3em] text-grey uppercase">Sample placeholder · curators only</p>
