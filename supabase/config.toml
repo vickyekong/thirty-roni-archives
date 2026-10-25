@@ -1,0 +1,13 @@
+project_id = "wwhhdrixdsoueupsdzab"
+
+# Contributors are not Supabase Auth users; the function authenticates each request
+# with the hashed invitation token instead of a JWT.
+[functions.contribute]
+verify_jwt = false
+import_map = "./functions/contribute/deno.json"
+
+# Authenticates the caller in code (getUser + admin role) rather than relying on the
+# gateway, which keeps it working with asymmetric JWT signing keys.
+[functions.admin-accounts]
+verify_jwt = false
+import_map = "./functions/admin-accounts/deno.json"
