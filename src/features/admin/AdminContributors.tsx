@@ -18,6 +18,7 @@ type ContributorRow = {
   relationship: string | null
   category: ContributorCategory
   email: string | null
+  shared_link_id: string | null
   created_at: string
   invitations: Invitation[]
   contributions: { id: string; status: string }[]
@@ -39,7 +40,7 @@ export function AdminContributors() {
     const { data, error: e } = await supabase
       .from('contributors')
       .select(
-        'id, full_name, relationship, category, email, created_at, invitations(id, status, expires_at, last_used_at, created_at), contributions(id, status)',
+        'id, full_name, relationship, category, email, shared_link_id, created_at, invitations(id, status, expires_at, last_used_at, created_at), contributions(id, status)',
       )
       .order('created_at', { ascending: true })
     if (e) setError('Could not load contributors.')
@@ -113,6 +114,8 @@ export function AdminContributors() {
         />
       )}
 
+      <SharedLinkPanel joined={rows?.filter((r) => r.shared_link_id).length ?? 0} />
+
       {issued && <IssuedLink {...issued} onDismiss={() => setIssued(null)} />}
       {error && <Notice tone="error" className="mb-6">{error}</Notice>}
 
@@ -145,6 +148,7 @@ export function AdminContributors() {
                       <p className="text-xs text-grey">
                         {CATEGORY_LABEL[row.category]}
                         {row.relationship ? ` · ${row.relationship}` : ''}
+                        {row.shared_link_id ? ' · joined via shared link' : ''}
                       </p>
                     </td>
                     <td className="px-4 py-4">
@@ -245,6 +249,140 @@ function IssuedLink({ name, link, expiresAt, onDismiss }: { name: string; link: 
         </p>
       </details>
     </div>
+  )
+}
+
+type SharedLink = { id: string; expires_at: string; created_at: string }
+
+function SharedLinkPanel({ joined }: { joined: number }) {
+  const auth = useAuth()
+  const [active, setActive] = useState<SharedLink | null | undefined>(undefined)
+  const [issued, setIssued] = useState<{ link: string; expiresAt: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState<'link' | 'message' | null>(null)
+
+  const load = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('shared_links')
+      .select('id, expires_at, created_at')
+      .eq('status', 'active')
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle()
+    if (e) setError('Could not load the shared link.')
+    setActive((data as SharedLink | null) ?? null)
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const create = async () => {
+    if (active && !window.confirm('Replace the shared link? The current link stops working immediately. People who already joined keep their drafts.'))
+      return
+    setBusy(true)
+    setError(null)
+    const { data, error: e } = await supabase.rpc('admin_create_shared_link', { p_expires_in_days: 60 })
+    const created = (data as { shared_link_id: string; token: string; expires_at: string }[] | null)?.[0]
+    setBusy(false)
+    if (e || !created) {
+      setError('Could not create the shared link.')
+      return
+    }
+    setCopied(null)
+    setIssued({ link: `${window.location.origin}/contribute#j=${created.token}`, expiresAt: created.expires_at })
+    void load()
+  }
+
+  const turnOff = async () => {
+    if (!active) return
+    if (!window.confirm('Turn off the shared link? Nobody new can join with it. People who already joined can still finish.')) return
+    setBusy(true)
+    const { error: e } = await supabase
+      .from('shared_links')
+      .update({ status: 'revoked', revoked_at: new Date().toISOString(), revoked_by: auth.user?.id ?? null })
+      .eq('id', active.id)
+    setBusy(false)
+    if (e) setError('Could not turn off the shared link.')
+    setIssued(null)
+    void load()
+  }
+
+  const message = issued
+    ? `We’re putting together something special for Roni’s 30th birthday on 3 December, and we’d love your memories, photos and wishes in it. Open this link, add your name, and share as much or as little as you like: ${issued.link}\nYour answers save as you go. Please keep it a surprise, and don’t share the link outside this group!`
+    : ''
+  const copy = async (what: 'link' | 'message') => {
+    if (!issued) return
+    try {
+      await navigator.clipboard.writeText(what === 'link' ? issued.link : message)
+      setCopied(what)
+    } catch {
+      setCopied(null)
+    }
+  }
+
+  return (
+    <section aria-labelledby="shared-link-heading" className="mb-10 rounded-2xl border border-midnight-line p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-prose">
+          <h2 id="shared-link-heading" className="font-serif text-2xl text-ivory">
+            Shared link
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-grey">
+            One link for everyone, for example in a family WhatsApp group. Each person types their name and gets their own private
+            draft. People without the link can’t get in, and everything is still reviewed by you before it appears.
+          </p>
+          <p className="mt-3 text-sm">
+            {active === undefined ? (
+              <span className="text-grey">Checking…</span>
+            ) : active ? (
+              <span className="text-success">
+                Active · expires {formatInLagos(active.expires_at, { dateStyle: 'medium' })} · {joined} {joined === 1 ? 'person has' : 'people have'} joined
+              </span>
+            ) : (
+              <span className="text-grey">Off{joined ? ` · ${joined} ${joined === 1 ? 'person' : 'people'} joined earlier` : ''}</span>
+            )}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant={active ? 'secondary' : 'primary'} onClick={() => void create()} loading={busy}>
+            {active ? 'Replace link' : 'Create shared link'}
+          </Button>
+          {active && (
+            <Button size="sm" variant="danger" onClick={() => void turnOff()} disabled={busy}>
+              Turn off
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {error && <Notice tone="error" className="mt-4">{error}</Notice>}
+
+      {issued && (
+        <div role="status" className="mt-5 rounded-2xl border border-gold/40 bg-gold/[0.06] p-5">
+          <p className="text-sm text-grey">
+            Copy it now. Only a fingerprint of the link is stored, so it cannot be shown again (use “Replace link” if you lose it).
+            Expires {formatInLagos(issued.expiresAt, { dateStyle: 'long' })}.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <input readOnly value={issued.link} aria-label="Shared link" className="field-input font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <div className="flex gap-2">
+              <Button onClick={() => void copy('link')}>{copied === 'link' ? 'Copied' : 'Copy link'}</Button>
+              <Button variant="ghost" onClick={() => setIssued(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-grey hover:text-ivory">Message for the group</summary>
+            <p className="mt-3 rounded-xl border border-midnight-line bg-midnight p-4 text-sm leading-relaxed whitespace-pre-line text-ivory/85">{message}</p>
+            <Button size="sm" variant="secondary" className="mt-3" onClick={() => void copy('message')}>
+              {copied === 'message' ? 'Copied' : 'Copy message'}
+            </Button>
+          </details>
+        </div>
+      )}
+    </section>
   )
 }
 

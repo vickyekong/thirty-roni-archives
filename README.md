@@ -5,7 +5,7 @@ A private, invitation-only archive for Roni's 30th birthday on **3 December 2026
 | Route | Who | Purpose |
 | --- | --- | --- |
 | `/` | Anyone | Countdown gate until launch. After launch, signed-in Roni (and family viewers, if enabled) see the birthday experience. Curators see it early in preview |
-| `/contribute` | Invited contributors (no account) | Contribution Studio: an 8-step guided form with uploads |
+| `/contribute` | Contributors (no account) with the shared group link or a personal link | Contribution Studio: an 8-step guided form with uploads |
 | `/admin` | Curator (`admin` role) | Contributors, invitation links, submissions, curation, library, launch settings, accounts |
 | `/my-archive` | Roni (`roni` role) | The Original Thirty (read-only) and her Continuing Story |
 | `/sign-in` | Roni, family viewers, curators | Email and password sign-in. There is no sign-up page |
@@ -41,7 +41,8 @@ Browser (Vercel static SPA)
 ```
 
 - **Contributors never get database access.** Every request goes through `supabase/functions/contribute`, which hashes the invitation token (SHA-256), checks it is active and unexpired, and only touches rows belonging to that contributor.
-- **Actions:** `session`, `start`, `save` (optimistic concurrency via `version`), `upload-url`, `finalize-upload` (magic-byte and size check of the stored object), `delete-media`, `submit` (idempotency key; freezes an immutable copy), `removal-request`.
+- **Shared link:** `/contribute#j=<token>` only allows `link` (is it valid?) and `join`. Joining takes a name, relationship and category, creates a contributor and a personal invitation, and returns that personal token; from then on the person is handled exactly like someone the curator invited individually. Joining is rate-limited per IP (8 per hour) and per link (300 per day).
+- **Actions:** `link`, `join`, `session`, `start`, `save` (optimistic concurrency via `version`), `upload-url`, `finalize-upload` (magic-byte and size check of the stored object), `delete-media`, `submit` (idempotency key; freezes an immutable copy), `removal-request`.
 - **Uploads:** browser → signed upload URL → private bucket. Photos are re-encoded on the device (longest edge 2800 px, JPEG) so EXIF/GPS data never leaves it. Anything that fails verification is marked `rejected` and its file deleted.
 - **Drafts** autosave every 2 s after typing stops, are mirrored to `localStorage`, and are flushed on tab hide, reconnect and unload. A replacement link reaches the same draft (one open draft per contributor).
 - **Curation** copies submitted content into separate curated tables. Originals stay immutable; nothing reaches the experience until a curator publishes it.
@@ -52,7 +53,7 @@ Browser (Vercel static SPA)
 ## Data model (summary)
 
 - `user_roles` (`admin`, `roni`, `family_viewer`) and `site_settings` (`launch_at`, `timezone`, `experience_active`, `preview_enabled`, `family_access_enabled`, `contributions_open`).
-- `contributors`, `invitations` (only `token_hash` is stored), `contributions` (`submitted_payload` is immutable once set), `contribution_drafts`, `media_assets`, `removal_requests`.
+- `contributors` (`shared_link_id` marks people who joined via the shared link), `invitations` and `shared_links` (only `token_hash` is stored; at most one active shared link), `contributions` (`submitted_payload` is immutable once set), `contribution_drafts`, `media_assets`, `removal_requests`.
 - Curated content, kept separate from originals: `archive_collections` (`original_thirty`, which can be locked, and `continuing_story`), `chapters`, `memories`, `timeline_milestones`, `birthday_wishes`, `letters`, `experience_content`, `contributor_profiles`, `content_approvals`.
 - `audit_logs` and `rate_limits` are server-only.
 
@@ -66,7 +67,8 @@ Migrations are in `supabase/migrations` and are applied to project `wwhhdrixdsou
 - **Original Thirty lock:** once locked, its memories, chapters, milestones, letters, wishes, profiles, editorial copy and media are read-only for everyone, curators included. Roni's Continuing Story is unaffected.
 - **Continuing Story:** Roni can create and edit it only after launch, only in her own collection, and only with media in her own storage folder. She cannot write to the Original Thirty or see contributions, drafts or unpublished items.
 - Private bucket; reads use 10-minute signed URLs; uploads use one-time signed URLs (contributors) or path-restricted storage policies (Roni).
-- Invitation tokens: 256-bit random, base64url, shown once, stored hashed, revocable, expiring. Links carry the token in the URL fragment (`#t=`), so it is never sent to servers or logs, and the app removes it from the address bar.
+- Invitation and shared-link tokens: 256-bit random, base64url, shown once, stored hashed, revocable, expiring. Links carry the token in the URL fragment (`#t=` personal, `#j=` shared), so it is never sent to servers or logs, and the app removes it from the address bar.
+- The shared link lets anyone who has it create a contributor, so treat it like a group password: share it only in private groups, and replace or turn it off if it leaks. People who already joined keep their own links and drafts. Nothing they submit appears anywhere until a curator approves and publishes it.
 - Rate limits per IP and per invitation; audit log for invitations, submissions, uploads, rejections and account changes.
 - Camera and microphone are requested only when the contributor presses record. Nothing autoplays, including the optional soundtrack.
 - `vercel.json` sets CSP (no `'unsafe-eval'`), HSTS, `X-Frame-Options: DENY`, `noindex` and a restrictive Permissions-Policy. Zod runs with `z.config({ jitless: true })` so it never probes `new Function` under that CSP.
@@ -119,12 +121,14 @@ Lock the Original Thirty from the overview once curation is final. A curator can
 
 ## Inviting contributors
 
-`/admin/contributors` → add a person → *Create link*. The link is shown **once**; copy it into a private message. *Replace link* revokes the old one and keeps the contributor's draft.
+- **Shared link (easiest):** `/admin/contributors` → *Shared link* → *Create shared link*. Post it (or the ready-made group message) in a private group chat. Each person types their name and how they know Roni, then gets their own draft and a personal link to continue on another device. *Replace link* stops the old link immediately; *Turn off* stops new people joining. Both keep existing drafts.
+- **Personal links:** add a person → *Create link*. The link is shown **once**; copy it into a private message. *Replace link* revokes the old one and keeps the contributor's draft.
 
 ## Tests
 
-- `supabase/tests/rls_smoke.sql`: 109 checks of RLS, storage policies, launch gating, the lock, the Continuing Story and admin RPCs, run as anonymous, contributor-less, family, Roni and curator users before and after launch. Everything runs in one transaction and rolls back; results come back as the error message `RLS_RESULTS {...}` (paste into the SQL editor and run). Last run: 109/109 passed.
+- `supabase/tests/rls_smoke.sql`: 120 checks of RLS, storage policies, launch gating, the lock, the Continuing Story, shared links and admin RPCs, run as anonymous, contributor-less, family, Roni and curator users before and after launch. Everything runs in one transaction and rolls back; results come back as the error message `RLS_RESULTS {...}` (paste into the SQL editor and run). Last run: 120/120 passed.
 - `scripts/smoke-contribute.mjs`: end-to-end test of the `contribute` edge function. Needs an active test invitation and leaves one submission behind, so delete it afterwards. Last run (Phase 2): 24/24 passed.
+- Shared link (25 Oct): checked against the deployed function and in the browser. Joining, validation, the personal link, reloading, "Forget this device", replacing and turning off the link, and that shared and personal tokens can't be swapped all work.
 - Browser checks (Phase 6): public routes and the full curator preview on a production build served with the `vercel.json` headers, with no CSP violations; desktop, 390 px mobile, reduced motion and `?lite` were checked in Phases 4 and 5.
 
 There is no test data in the project: all QA accounts, contributors, submissions, content and files have been removed. The four chapters and the empty Original Thirty collection remain.
@@ -132,6 +136,7 @@ There is no test data in the project: all QA accounts, contributors, submissions
 ## Known notes
 
 - **Supabase advisors** report three intentional security warnings: `rate_limits` has RLS with no policies (server-only by design); `experience_access()` is a `SECURITY DEFINER` function callable by anyone (it only returns gate state); `ensure_my_collection()` is `SECURITY DEFINER` and checks the role itself. Performance notes (unindexed `*_by` foreign keys, multiple permissive policies) don't matter at this scale.
-- The deployed `contribute` function predates the `jitless` line in `supabase/functions/_shared/contribution.ts`. Deno has no CSP, so this changes nothing; redeploy only if you want them identical.
+- The Supabase CLI isn't installed here, so edge functions were deployed through the Supabase MCP. The deployed `contribute` function (version 3) matches `supabase/functions/contribute`.
+- Consider turning on *Leaked password protection* (Authentication → Sign In / Providers → Email) for curator and Roni accounts.
 - Lint reports warnings only (mostly `set-state-in-effect` in data-loading effects); no errors.
 - The largest JS chunk is three.js (~245 kB gzipped). It loads only with the birthday experience, not on `/contribute` or `/admin`.

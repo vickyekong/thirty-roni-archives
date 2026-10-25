@@ -41,6 +41,8 @@ export type SessionData = {
 }
 
 type Responses = {
+  link: { contributionsOpen: boolean }
+  join: { token: string }
   session: SessionData
   start: { contributionId: string; created: boolean }
   save: { version: number; updatedAt: string }
@@ -52,6 +54,8 @@ type Responses = {
 }
 
 type Requests = {
+  link: Record<string, never>
+  join: { fullName: string; relationship: string; category: ContributorCategory }
   session: Record<string, never>
   start: Record<string, never>
   save: { contributionId: string; payload: ContributionPayload; step: number; version: number }
@@ -90,7 +94,7 @@ export class ApiError extends Error {
 }
 
 /** Actions that are safe to repeat automatically after a dropped connection. */
-const RETRYABLE: ReadonlySet<Action> = new Set(['session', 'start', 'save', 'finalize-upload', 'delete-media', 'submit'])
+const RETRYABLE: ReadonlySet<Action> = new Set(['link', 'session', 'start', 'save', 'finalize-upload', 'delete-media', 'submit'])
 const RETRYABLE_STATUS = new Set([502, 503, 504])
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

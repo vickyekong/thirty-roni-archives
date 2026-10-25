@@ -28,7 +28,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export const buttonClasses = (variant: Variant = 'primary', size: Size = 'md', className?: string) =>
   cn(
-    'inline-flex items-center justify-center gap-2 rounded-full font-medium tracking-wide transition-colors duration-200 ease-[var(--ease-editorial)] cursor-pointer disabled:cursor-not-allowed select-none',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium tracking-wide transition-colors duration-200 ease-[var(--ease-editorial)] cursor-pointer disabled:cursor-not-allowed select-none',
     variants[variant],
     sizes[size],
     className,

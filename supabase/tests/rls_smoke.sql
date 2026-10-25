@@ -108,6 +108,11 @@ with c as (insert into public.contributors (full_name, category) values ('rls: F
 insert into t_ids select 'friend', id from c;
 with c as (insert into public.contributors (full_name, category) values ('rls: Importer', 'friend') returning id)
 insert into t_ids select 'importer', id from c;
+update public.shared_links set status = 'revoked' where status = 'active';
+with c as (
+  insert into public.shared_links (token_hash, expires_at)
+  values (encode(extensions.digest('rls: shared link', 'sha256'), 'hex'), now() + interval '7 days') returning id
+) insert into t_ids select 'shared', id from c;
 with c as (insert into public.contributions (contributor_id, status) values (pg_temp.id('contributor'), 'draft') returning id)
 insert into t_ids select 'draft', id from c;
 insert into public.contribution_drafts (contribution_id, payload) values (pg_temp.id('draft'), '{"note":"rls: private draft"}');
@@ -147,6 +152,8 @@ select pg_temp.check('anon: experience_access grants nothing',
 select pg_temp.blocked('anon: cannot call rate limiter', $$select public.consume_rate_limit('x', 1, 60)$$);
 select pg_temp.blocked('anon: cannot create invitations', format('select * from public.admin_create_invitation(%L, 30)', pg_temp.id('contributor')));
 select pg_temp.blocked('anon: cannot create a personal collection', 'select public.ensure_my_collection()');
+select pg_temp.rows('anon: cannot read shared links', format('select id::text from public.shared_links where id = %L', pg_temp.id('shared')), 0);
+select pg_temp.blocked('anon: cannot create a shared link', 'select * from public.admin_create_shared_link(30)');
 reset role;
 
 -- Signed in, no role ------------------------------------------------------------------
@@ -162,6 +169,10 @@ select pg_temp.blocked('no role: cannot arrange wishes', $$select public.admin_a
 select pg_temp.blocked('no role: cannot review submissions', format($$select public.admin_review_contribution(%L, 'approved')$$, gen_random_uuid()));
 select pg_temp.blocked('no role: cannot import submissions', format($$select public.admin_import_contribution(%L, '{}'::jsonb)$$, gen_random_uuid()));
 select pg_temp.blocked('no role: cannot create a personal collection', 'select public.ensure_my_collection()');
+select pg_temp.rows('no role: cannot read shared links', format('select id::text from public.shared_links where id = %L', pg_temp.id('shared')), 0);
+select pg_temp.blocked('no role: cannot create a shared link', 'select * from public.admin_create_shared_link(30)');
+select pg_temp.blocked('no role: cannot insert a shared link', $$insert into public.shared_links (token_hash, expires_at) values (repeat('a', 64), now() + interval '1 day')$$);
+select pg_temp.untouched('no role: cannot turn off the shared link', format($$update public.shared_links set status = 'revoked' where id = %L$$, pg_temp.id('shared')));
 reset role;
 
 -- Family viewer before launch -----------------------------------------------------------
@@ -222,6 +233,7 @@ select pg_temp.rows('family live: cannot see continuing story', format('select t
 select pg_temp.check('family live: experience_access says yes', (public.experience_access() ->> 'can_view')::boolean, public.experience_access()::text);
 select pg_temp.blocked('family live: cannot create a personal collection', 'select public.ensure_my_collection()');
 select pg_temp.blocked('family live: cannot write to the continuing story', format($$insert into public.memories (collection_id, title) values (%L, 'rls: intruder')$$, pg_temp.id('continuing')));
+select pg_temp.rows('family live: cannot read shared links', format('select id::text from public.shared_links where id = %L', pg_temp.id('shared')), 0);
 reset role;
 
 set local role authenticated;
@@ -284,6 +296,8 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-000000000002","role":"authenticated"}';
 select pg_temp.check('roni: unaffected by the family switch', (public.experience_access() ->> 'can_view')::boolean, public.experience_access()::text);
+select pg_temp.rows('roni: cannot read shared links', format('select id::text from public.shared_links where id = %L', pg_temp.id('shared')), 0);
+select pg_temp.blocked('roni: cannot create a shared link', 'select * from public.admin_create_shared_link(30)');
 reset role;
 
 -- Admin -------------------------------------------------------------------------------
@@ -302,6 +316,21 @@ begin
     v_token is not null and length(v_token) = 43
       and exists (select 1 from public.invitations where token_hash = encode(extensions.digest(v_token, 'sha256'), 'hex'))
       and not exists (select 1 from public.invitations where token_hash = v_token),
+    'token length ' || length(v_token)
+  );
+end $$;
+select pg_temp.rows('admin: reads shared links', format('select id::text from public.shared_links where id = %L', pg_temp.id('shared')), 1);
+do $$
+declare v_token text;
+begin
+  select token into v_token from public.admin_create_shared_link(30);
+  perform pg_temp.check(
+    'admin: creates shared link, stores only hash, replaces the old one',
+    v_token is not null and length(v_token) = 43
+      and exists (select 1 from public.shared_links where status = 'active' and token_hash = encode(extensions.digest(v_token, 'sha256'), 'hex'))
+      and not exists (select 1 from public.shared_links where token_hash = v_token)
+      and (select status from public.shared_links where id = pg_temp.id('shared')) = 'revoked'
+      and (select count(*) from public.shared_links where status = 'active') = 1,
     'token length ' || length(v_token)
   );
 end $$;

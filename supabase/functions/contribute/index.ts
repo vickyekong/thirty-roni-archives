@@ -1,10 +1,12 @@
 // The single gateway for invited contributors. Contributors never receive database
 // credentials: every request carries the raw invitation token, which is hashed and
 // matched here, and all reads/writes are scoped to that invitation's contributor
-// (so a replacement link still reaches the same unfinished draft).
+// (so a replacement link still reaches the same unfinished draft). A shared group link
+// only grants `join`, which creates a contributor with their own personal invitation.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { z } from 'zod'
 import {
+  CONTRIBUTOR_CATEGORIES,
   MEDIA_PURPOSES,
   MEDIA_RULES,
   MIME_EXTENSIONS,
@@ -126,6 +128,14 @@ const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Invalid invitation link')
 const contributionId = z.uuid()
 
 const requestSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('link'), token }),
+  z.object({
+    action: z.literal('join'),
+    token,
+    fullName: z.string().trim().min(1, 'Please tell us your name').max(120),
+    relationship: z.string().trim().max(120).default(''),
+    category: z.enum(CONTRIBUTOR_CATEGORIES),
+  }),
   z.object({ action: z.literal('session'), token }),
   z.object({ action: z.literal('start'), token }),
   z.object({
@@ -204,6 +214,69 @@ async function resolveInvitation(rawToken: string, ipHash: string): Promise<Invi
     await db.from('invitations').update({ last_used_at: new Date().toISOString() }).eq('id', invitation.id)
   }
   return invitation
+}
+
+type SharedLink = { id: string; status: 'active' | 'revoked'; expires_at: string }
+
+async function resolveSharedLink(rawToken: string, ipHash: string): Promise<SharedLink> {
+  const { data, error } = await db
+    .from('shared_links')
+    .select('id, status, expires_at')
+    .eq('token_hash', await sha256Hex(rawToken))
+    .maybeSingle()
+  if (error) throw new HttpError(500, 'server_error', 'We could not check this link. Please try again.')
+  if (!data) {
+    const allowed = await rateLimit(`badtoken:${ipHash}`, 20, 3600)
+    if (!allowed) throw new HttpError(429, 'rate_limited', 'Too many attempts. Please wait a while and try again.')
+    throw new HttpError(401, 'invalid_shared_link', 'This link is not valid. Please check the link you were sent.')
+  }
+  const link = data as SharedLink
+  if (link.status === 'revoked')
+    throw new HttpError(403, 'shared_link_off', 'This link has been turned off. Please ask the person who shared it for the new one.')
+  if (new Date(link.expires_at).getTime() <= Date.now())
+    throw new HttpError(403, 'shared_link_expired', 'This link has expired. Please ask the person who shared it for a new one.')
+  return link
+}
+
+function randomToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function handleShared(req: Extract<ApiRequest, { action: 'link' | 'join' }>, ipHash: string) {
+  const link = await resolveSharedLink(req.token, ipHash)
+  if (req.action === 'link') return { contributionsOpen: await contributionsOpen() }
+
+  if (!(await contributionsOpen())) throw new HttpError(403, 'closed', 'Contributions are now closed. Thank you so much.')
+  if (!(await rateLimit(`join:${ipHash}`, 8, 3600)))
+    throw new HttpError(429, 'rate_limited', 'Several people have already joined from this connection. Please try again a little later.')
+  if (!(await rateLimit(`joinlink:${link.id}`, 300, 86400)))
+    throw new HttpError(429, 'rate_limited', 'This link is very busy right now. Please try again later.')
+
+  const { data: contributor, error } = await db
+    .from('contributors')
+    .insert({
+      full_name: req.fullName,
+      relationship: req.relationship || null,
+      category: req.category,
+      shared_link_id: link.id,
+    })
+    .select('id')
+    .single()
+  if (error || !contributor) throw new HttpError(500, 'server_error', 'We could not set up your contribution. Please try again.')
+
+  const personal = randomToken()
+  const { error: inviteError } = await db.from('invitations').insert({
+    contributor_id: contributor.id,
+    token_hash: await sha256Hex(personal),
+    expires_at: new Date(Date.now() + 60 * 86400_000).toISOString(),
+  })
+  if (inviteError) {
+    await db.from('contributors').delete().eq('id', contributor.id)
+    throw new HttpError(500, 'server_error', 'We could not set up your contribution. Please try again.')
+  }
+  await audit('contributor.joined', 'contributors', contributor.id, contributor.id, ipHash, { sharedLinkId: link.id })
+  return { token: personal }
 }
 
 async function contributionsOpen(): Promise<boolean> {
@@ -330,6 +403,7 @@ async function removeMedia(rows: Pick<MediaRow, 'id' | 'storage_path'>[]) {
 // Actions
 // ---------------------------------------------------------------------------
 async function handle(req: ApiRequest, ipHash: string) {
+  if (req.action === 'link' || req.action === 'join') return handleShared(req, ipHash)
   const invitation = await resolveInvitation(req.token, ipHash)
   const contributor = invitation.contributor
 

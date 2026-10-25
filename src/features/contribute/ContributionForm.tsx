@@ -163,7 +163,7 @@ export function ContributionForm({
           <span>
             Step {stepIndex + 1} of {STEP_KEYS.length}
           </span>
-          <span className="hidden sm:inline">Invited as {contributor.fullName}</span>
+          <span className="hidden sm:inline">Contributing as {contributor.fullName}</span>
         </div>
         <div className="h-px w-full bg-midnight-line" aria-hidden="true">
           <div className="h-px bg-gold transition-[width] duration-500 ease-[var(--ease-editorial)]" style={{ width: `${progress}%` }} />
