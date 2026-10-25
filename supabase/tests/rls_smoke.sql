@@ -133,6 +133,25 @@ insert into storage.objects (bucket_id, name) values
   ('archive', 'original/rls/draft.jpg'),
   ('archive', 'continuing/a0000000-0000-4000-8000-000000000002/rls.jpg');
 
+-- Published sample content: only curators may ever see it. Items made from a sample
+-- contributor inherit the flag.
+with c as (insert into public.contributors (full_name, category, is_sample) values ('rls: Sample', 'friend', true) returning id)
+insert into t_ids select 'sample', id from c;
+insert into public.memories (collection_id, title, is_published, audience, contributor_id)
+  values (pg_temp.id('original'), 'rls: sample memory', true, 'everyone', pg_temp.id('sample'));
+insert into public.birthday_wishes (collection_id, message, is_published, audience, contributor_id)
+  values (pg_temp.id('original'), 'rls: sample wish', true, 'everyone', pg_temp.id('sample'));
+insert into public.contributor_profiles (contributor_id, display_name, is_published) values (pg_temp.id('sample'), 'rls: sample person', true);
+insert into public.experience_content (key, content, is_published, is_sample) values ('rls_test.sample', '{}', true, true);
+insert into public.media_assets (bucket, storage_path, kind, purpose, status, mime_type, collection_id, is_published, is_sample) values
+  ('archive', 'original/rls/sample.jpg', 'image', 'curated', 'verified', 'image/jpeg', pg_temp.id('original'), true, true);
+insert into storage.objects (bucket_id, name) values ('archive', 'original/rls/sample.jpg');
+select pg_temp.check('samples: flag inherited from a sample contributor',
+  (select is_sample from public.memories where title = 'rls: sample memory')
+    and (select is_sample from public.birthday_wishes where message = 'rls: sample wish')
+    and (select is_sample from public.contributor_profiles where display_name = 'rls: sample person'),
+  'memory, wish and profile');
+
 -- Pre-launch state: switched off, launch time already passed.
 update public.site_settings set experience_active = false, family_access_enabled = true, launch_at = now() - interval '1 day';
 
@@ -161,6 +180,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-000000000004","role":"authenticated"}';
 select pg_temp.rows('no role: cannot read contributors', 'select full_name from public.contributors', 0);
 select pg_temp.rows('no role: cannot read memories', 'select title from public.memories', 0);
+select pg_temp.blocked('no role: cannot clear sample content', 'select public.admin_clear_sample_content()');
 select pg_temp.blocked('no role: cannot create invitations', format('select * from public.admin_create_invitation(%L, 30)', pg_temp.id('contributor')));
 select pg_temp.blocked('no role: cannot self-grant admin', $$insert into public.user_roles (user_id, role) values ('a0000000-0000-4000-8000-000000000004', 'admin')$$);
 select pg_temp.untouched('no role: cannot change launch settings', 'update public.site_settings set experience_active = true');
@@ -234,6 +254,12 @@ select pg_temp.check('family live: experience_access says yes', (public.experien
 select pg_temp.blocked('family live: cannot create a personal collection', 'select public.ensure_my_collection()');
 select pg_temp.blocked('family live: cannot write to the continuing story', format($$insert into public.memories (collection_id, title) values (%L, 'rls: intruder')$$, pg_temp.id('continuing')));
 select pg_temp.rows('family live: cannot read shared links', format('select id::text from public.shared_links where id = %L', pg_temp.id('shared')), 0);
+select pg_temp.rows('family live: no sample items', $$select title from public.memories where title like 'rls: sample%'
+  union all select message from public.birthday_wishes where message like 'rls: sample%'
+  union all select display_name from public.contributor_profiles where display_name like 'rls: sample%'
+  union all select key from public.experience_content where key = 'rls_test.sample'
+  union all select storage_path from public.media_assets where storage_path like '%rls/sample%'
+  union all select name from storage.objects where name like '%rls/sample%'$$, 0);
 reset role;
 
 set local role authenticated;
@@ -245,6 +271,12 @@ select pg_temp.rows('roni live: published media and her own', $$select storage_p
 select pg_temp.rows('roni live: can sign published files and her own', $$select name from storage.objects where name like '%rls%'$$, 2);
 select pg_temp.rows('roni live: cannot read contributions', 'select id::text from public.contributions', 0);
 select pg_temp.rows('roni live: cannot read drafts', 'select contribution_id::text from public.contribution_drafts', 0);
+select pg_temp.rows('roni live: no sample items', $$select title from public.memories where title like 'rls: sample%'
+  union all select message from public.birthday_wishes where message like 'rls: sample%'
+  union all select display_name from public.contributor_profiles where display_name like 'rls: sample%'
+  union all select key from public.experience_content where key = 'rls_test.sample'
+  union all select storage_path from public.media_assets where storage_path like '%rls/sample%'
+  union all select name from storage.objects where name like '%rls/sample%'$$, 0);
 select pg_temp.check('roni live: experience_access says yes',
   (public.experience_access() ->> 'can_view')::boolean and (public.experience_access() ->> 'is_roni')::boolean,
   public.experience_access()::text);
@@ -303,10 +335,16 @@ reset role;
 -- Admin -------------------------------------------------------------------------------
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-000000000001","role":"authenticated"}';
-select pg_temp.rows('admin: reads contributors', $$select full_name from public.contributors where full_name like 'rls:%'$$, 3);
+select pg_temp.rows('admin: reads contributors', $$select full_name from public.contributors where full_name like 'rls:%'$$, 4);
+select pg_temp.rows('admin: sees sample items', $$select title from public.memories where title like 'rls: sample%'
+  union all select message from public.birthday_wishes where message like 'rls: sample%'
+  union all select display_name from public.contributor_profiles where display_name like 'rls: sample%'
+  union all select key from public.experience_content where key = 'rls_test.sample'
+  union all select storage_path from public.media_assets where storage_path like '%rls/sample%'
+  union all select name from storage.objects where name like '%rls/sample%'$$, 6);
 select pg_temp.rows('admin: reads all chapters', 'select key::text from public.chapters', 4);
 select pg_temp.rows('admin: reads contributor drafts', format('select contribution_id::text from public.contribution_drafts where contribution_id = %L', pg_temp.id('draft')), 1);
-select pg_temp.rows('admin: reads unpublished wishes', $$select message from public.birthday_wishes where message like 'rls:%'$$, 3);
+select pg_temp.rows('admin: reads unpublished wishes', $$select message from public.birthday_wishes where message like 'rls:%'$$, 4);
 do $$
 declare v_token text;
 begin
@@ -365,6 +403,10 @@ select pg_temp.rows('admin: hiding unpublishes what was derived from it', $$sele
 select pg_temp.allowed('admin: arranges wishes on stars', format($$select public.admin_arrange_wishes(jsonb_build_array(jsonb_build_object('id', %L, 'star', 1)), null)$$,
   (select id from public.birthday_wishes where message = 'rls: wish published')));
 select pg_temp.rows('admin: star assignment saved', $$select message from public.birthday_wishes where message = 'rls: wish published' and star_index = 1$$, 1);
+select pg_temp.blocked('admin: cannot lock while sample content exists', 'select public.admin_set_original_lock(true)');
+select pg_temp.check('admin: clearing samples returns their files',
+  public.admin_clear_sample_content() -> 'files' @> '[{"bucket":"archive","path":"original/rls/sample.jpg"}]'::jsonb, 'sample.jpg listed');
+select pg_temp.check('admin: no sample content remains', not private.sample_content_exists(), 'all removed');
 select pg_temp.allowed('admin: locks the Original Thirty', 'select public.admin_set_original_lock(true)');
 reset role;
 

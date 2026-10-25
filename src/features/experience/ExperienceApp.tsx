@@ -10,7 +10,7 @@ type Props = { preview: boolean; live: boolean; roni: boolean; onExitPeek?: () =
 /** With `onExitPeek` this is the public sneak peek: no data is loaded, only placeholders. */
 export function ExperienceApp({ preview, live, roni, onExitPeek }: Props) {
   const peek = Boolean(onExitPeek)
-  const { data, urls, error } = useExperienceData(peek)
+  const { data, urls, error } = useExperienceData({ peek, curator: preview })
   const [entered, setEntered] = useState(false)
 
   if (error)

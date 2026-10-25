@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useExperience, useMedia, type Person } from '../data'
-import { MediaPlayer, monogram, Photo, PreviewEmpty, SectionHeader } from '../ui'
+import { MediaPlayer, monogram, Photo, PreviewEmpty, SectionHeader, SourceTag } from '../ui'
 
 function PersonCard({ person, index }: { person: Person; index: number }) {
   const media = useMedia()
@@ -47,6 +47,7 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
               <MediaPlayer media={video} label={`Video message from ${person.name}`} />
             </div>
           )}
+          <SourceTag source={person.source} edit={`/admin/people?edit=${person.id}`} className="mt-6" />
         </div>
       </article>
     </motion.li>

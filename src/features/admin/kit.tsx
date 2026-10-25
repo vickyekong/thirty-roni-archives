@@ -8,9 +8,24 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
+import { useSearchParams } from 'react-router'
 import { Notice } from '@/components/ui/Notice'
 import { cn } from '@/lib/cn'
 import { supabase } from '@/lib/supabase'
+
+/**
+ * Editing state that starts on the item named in `?edit=` (the curator preview's Edit links)
+ * and scrolls to its editor once the list has loaded. Give that editor `id="edit-<id>"`.
+ */
+export function useEditParam(loaded: boolean) {
+  const [params] = useSearchParams()
+  const [initial] = useState(() => params.get('edit'))
+  const [editing, setEditing] = useState<string | 'new' | null>(initial)
+  useEffect(() => {
+    if (loaded && initial) document.getElementById(`edit-${initial}`)?.scrollIntoView({ block: 'start' })
+  }, [loaded, initial])
+  return [editing, setEditing] as const
+}
 
 // Compact curator form controls. The contributor studio uses large serif labels;
 // the dashboard is a working tool and favours density.

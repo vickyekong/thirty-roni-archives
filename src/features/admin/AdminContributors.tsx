@@ -19,6 +19,7 @@ type ContributorRow = {
   category: ContributorCategory
   email: string | null
   shared_link_id: string | null
+  is_sample: boolean
   created_at: string
   invitations: Invitation[]
   contributions: { id: string; status: string }[]
@@ -40,7 +41,7 @@ export function AdminContributors() {
     const { data, error: e } = await supabase
       .from('contributors')
       .select(
-        'id, full_name, relationship, category, email, shared_link_id, created_at, invitations(id, status, expires_at, last_used_at, created_at), contributions(id, status)',
+        'id, full_name, relationship, category, email, shared_link_id, is_sample, created_at, invitations(id, status, expires_at, last_used_at, created_at), contributions(id, status)',
       )
       .order('created_at', { ascending: true })
     if (e) setError('Could not load contributors.')
@@ -149,6 +150,7 @@ export function AdminContributors() {
                         {CATEGORY_LABEL[row.category]}
                         {row.relationship ? ` · ${row.relationship}` : ''}
                         {row.shared_link_id ? ' · joined via shared link' : ''}
+                        {row.is_sample ? ' · sample' : ''}
                       </p>
                     </td>
                     <td className="px-4 py-4">

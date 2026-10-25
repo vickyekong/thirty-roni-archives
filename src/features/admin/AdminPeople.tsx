@@ -6,7 +6,7 @@ import { useSignedUrls } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
 import { PageTitle } from './AdminLayout'
 import { MediaPicker, MediaThumb, loadMediaByIds, type PickerMedia } from './MediaPicker'
-import { Area, Check, Input, LockedNotice, Panel, Pill, PublishedPill, Select, publishMedia, useOriginalCollection } from './kit'
+import { Area, Check, Input, LockedNotice, Panel, Pill, PublishedPill, Select, publishMedia, useEditParam, useOriginalCollection } from './kit'
 
 type Profile = {
   id: string
@@ -20,18 +20,19 @@ type Profile = {
   tone: 'heartfelt' | 'humorous' | 'both' | null
   sort_order: number
   is_published: boolean
+  is_sample: boolean
 }
 
 type Contributor = { id: string; full_name: string; relationship: string | null }
 
-const SELECT = 'id, contributor_id, display_name, relationship_label, portrait_media_id, voice_media_id, video_media_id, message, tone, sort_order, is_published'
+const SELECT = 'id, contributor_id, display_name, relationship_label, portrait_media_id, voice_media_id, video_media_id, message, tone, sort_order, is_published, is_sample'
 
 export function AdminPeople() {
   const { collection } = useOriginalCollection()
   const [rows, setRows] = useState<Profile[] | null>(null)
   const [contributors, setContributors] = useState<Contributor[]>([])
   const [media, setMedia] = useState<Record<string, PickerMedia>>({})
-  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [editing, setEditing] = useEditParam(rows !== null)
   const locked = Boolean(collection?.is_locked)
 
   const load = useCallback(async () => {
@@ -40,12 +41,12 @@ export function AdminPeople() {
       supabase.from('contributors').select('id, full_name, relationship').order('full_name'),
     ])
     const list = (p.data ?? []) as Profile[]
-    setRows(list)
-    setContributors((c.data ?? []) as Contributor[])
     const loaded = await loadMediaByIds(
       list.flatMap((r) => [r.portrait_media_id, r.voice_media_id, r.video_media_id]).filter((x): x is string => Boolean(x)),
     )
     setMedia(Object.fromEntries(loaded.map((x) => [x.id, x])))
+    setRows(list)
+    setContributors((c.data ?? []) as Contributor[])
   }, [])
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export function AdminPeople() {
         <ol className="flex flex-col gap-3">
           {rows.map((r, i) =>
             editing === r.id ? (
-              <li key={r.id}>
+              <li key={r.id} id={`edit-${r.id}`} className="scroll-mt-24">
                 <ProfileEditor profile={r} contributors={contributors} media={media} onDone={done} />
               </li>
             ) : (
@@ -110,6 +111,7 @@ export function AdminPeople() {
                   <p className="text-xs text-grey">{r.relationship_label ?? '—'}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {r.is_sample && <Pill tone="gold">Sample</Pill>}
                   {r.voice_media_id && <Pill>Voice</Pill>}
                   {r.video_media_id && <Pill>Video</Pill>}
                   <PublishedPill published={r.is_published} />

@@ -124,14 +124,23 @@ Lock the Original Thirty from the overview once curation is final. A curator can
 - **Shared link (easiest):** `/admin/contributors` → *Shared link* → *Create shared link*. Post it (or the ready-made group message) in a private group chat. Each person types their name and how they know Roni, then gets their own draft and a personal link to continue on another device. *Replace link* stops the old link immediately; *Turn off* stops new people joining. Both keep existing drafts.
 - **Personal links:** add a person → *Create link*. The link is shown **once**; copy it into a private message. *Replace link* revokes the old one and keeps the contributor's draft.
 
+## Sample content
+
+The project currently holds **clearly labelled sample content** so every section of the experience can be seen filled in before real contributions arrive: six sample contributors (all named "Sample …"), 13 memories, 6 wishes on stars, 3 letters, 5 people cards, 4 timeline milestones, a sample Roni Times and a sample final message, with placeholder photos that show no people. Every text says it is a placeholder; nothing describes the real Roni.
+
+- **Only curators see it.** Rows are flagged `is_sample`, and restrictive policies hide them (and their files) from Roni, family and visitors, before and after launch. "What Roni will see" on the Overview ignores them.
+- **Where things come from.** With *Curator preview* on, every item in the experience carries a dashed tag: who it's from (or "Added by a curator"), a *Sample* chip, *View submission* (the contributor's original words) and *Edit* (opens that exact item in the dashboard, in a new tab). Real contributions get the same tags.
+- **How it was made.** `scripts/seed-samples.mjs` sends each sample person through the real contributor studio (the `contribute` function, uploads included), then approves, adds to the archive and publishes as a curator would. It needs curator credentials: `SUPABASE_URL=… SUPABASE_PUBLISHABLE_KEY=… ADMIN_EMAIL=… ADMIN_PASSWORD=… node scripts/seed-samples.mjs`. It refuses to run while samples exist and never overwrites editorial copy you've written.
+- **Removing it.** Overview → *Remove all sample content* deletes every sample row and file in one go. The Original Thirty can't be locked until this is done.
+
 ## Tests
 
-- `supabase/tests/rls_smoke.sql`: 120 checks of RLS, storage policies, launch gating, the lock, the Continuing Story, shared links and admin RPCs, run as anonymous, contributor-less, family, Roni and curator users before and after launch. Everything runs in one transaction and rolls back; results come back as the error message `RLS_RESULTS {...}` (paste into the SQL editor and run). Last run: 120/120 passed.
+- `supabase/tests/rls_smoke.sql`: 128 checks of RLS, storage policies, launch gating, the lock, the Continuing Story, shared links, sample content and admin RPCs, run as anonymous, contributor-less, family, Roni and curator users before and after launch. Everything runs in one transaction and rolls back; results come back as the error message `RLS_RESULTS {...}` (paste into the SQL editor and run). Last run (25 Oct): 128/128 passed.
 - `scripts/smoke-contribute.mjs`: end-to-end test of the `contribute` edge function. Needs an active test invitation and leaves one submission behind, so delete it afterwards. Last run (Phase 2): 24/24 passed.
 - Shared link (25 Oct): checked against the deployed function and in the browser. Joining, validation, the personal link, reloading, "Forget this device", replacing and turning off the link, and that shared and personal tokens can't be swapped all work.
 - Browser checks (Phase 6): public routes and the full curator preview on a production build served with the `vercel.json` headers, with no CSP violations; desktop, 390 px mobile, reduced motion and `?lite` were checked in Phases 4 and 5.
 
-There is no test data in the project: all QA accounts, contributors, submissions, content and files have been removed. The four chapters and the empty Original Thirty collection remain.
+There is no test data in the project: all QA accounts and test submissions have been removed. The only content is the labelled sample content described above.
 
 ## Known notes
 

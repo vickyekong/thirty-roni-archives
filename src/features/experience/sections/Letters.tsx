@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { useState } from 'react'
 import { cn } from '@/lib/cn'
 import { useExperience, useMedia, type Letter } from '../data'
-import { Dialog, monogram, Photo, PreviewEmpty, SectionHeader } from '../ui'
+import { Dialog, monogram, Photo, PreviewEmpty, SectionHeader, SourceTag } from '../ui'
 
 function Envelope({ letter, onOpen, large, index }: { letter: Letter; onOpen: () => void; large?: boolean; index: number }) {
   const reduce = useReducedMotion()
@@ -41,6 +41,7 @@ function Envelope({ letter, onOpen, large, index }: { letter: Letter; onOpen: ()
         </span>
         <span className="absolute inset-x-0 bottom-[8%] px-4 text-center font-serif text-lg sm:text-xl">From {from}</span>
       </button>
+      <SourceTag source={letter.source} edit={`/admin/stories?tab=letters&edit=${letter.id}`} className="mt-3" />
     </motion.li>
   )
 }
@@ -72,6 +73,7 @@ function LetterBody({ letter }: { letter: Letter }) {
           )}
         </div>
       )}
+      <SourceTag source={letter.source} edit={`/admin/stories?tab=letters&edit=${letter.id}`} tone="paper" className="mt-8" />
     </article>
   )
 }

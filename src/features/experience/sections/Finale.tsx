@@ -2,7 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useExperience } from '../data'
-import { PillButton, PreviewEmpty } from '../ui'
+import { PillButton, PreviewEmpty, SourceTag } from '../ui'
 
 function Candle({ lit }: { lit: boolean }) {
   return (
@@ -98,6 +98,12 @@ export function Finale({ onRevisit }: { onRevisit: () => void }) {
                 <>
                   <p className="font-serif text-2xl leading-relaxed whitespace-pre-line text-ivory sm:text-3xl">{finale.finalMessage}</p>
                   {finale.finalSignature && <p className="mt-6 font-serif text-xl text-gold italic">— {finale.finalSignature}</p>}
+                  <SourceTag
+                    sample={data.sampleEditorial.includes('finale')}
+                    label="Final message, written in Editorial"
+                    edit="/admin/editorial?tab=finale"
+                    className="mx-auto mt-6 w-fit"
+                  />
                 </>
               ) : (
                 preview && (

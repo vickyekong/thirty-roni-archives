@@ -5,7 +5,7 @@ import { POINTS, STROKES } from '../constellation'
 import { useExperience, type Wish } from '../data'
 import { canRender3D, SceneBoundary, useNearViewport } from '../support'
 import type { StarState } from '../three/WishesScene'
-import { PreviewEmpty, SectionHeader } from '../ui'
+import { PreviewEmpty, SectionHeader, SourceTag } from '../ui'
 
 const WishesScene = lazy(() => import('../three/WishesScene'))
 
@@ -42,6 +42,7 @@ function WishText({ wish, large }: { wish: Wish; large?: boolean }) {
     <>
       <p className={cn('font-serif leading-relaxed whitespace-pre-line text-ivory', large ? 'text-3xl sm:text-4xl' : 'text-2xl')}>“{wish.message}”</p>
       {wish.author && <p className="mt-4 text-sm tracking-[0.2em] text-gold uppercase">— {wish.author}</p>}
+      <SourceTag source={wish.source} edit={`/admin/wishes?edit=${wish.id}`} className="mt-4" />
     </>
   )
 }
@@ -145,6 +146,7 @@ export function Wishes() {
                     <p className="text-xs tracking-[0.25em] text-grey uppercase">{w.final ? 'Final star' : w.star ? `Star ${w.star}` : 'Wish'}</p>
                     <p className="mt-2 leading-relaxed whitespace-pre-line text-ivory/90">{w.message}</p>
                     {w.author && <p className="mt-2 text-sm text-gold">— {w.author}</p>}
+                    <SourceTag source={w.source} edit={`/admin/wishes?edit=${w.id}`} className="mt-3" />
                     {w.star && (
                       <button
                         type="button"

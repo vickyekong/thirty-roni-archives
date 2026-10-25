@@ -142,8 +142,8 @@ export function PreviewBanner({ live }: { live: boolean }) {
       <p className="font-medium tracking-[0.2em] text-gold uppercase">{live ? 'Curator view' : 'Curator preview'}</p>
       <p className="mt-1 hidden sm:block">
         {live
-          ? 'The archive is live. Curator-only notes are shown on empty sections.'
-          : `Only published items are shown, exactly as Roni will see them${settings ? ` from ${formatInLagos(settings.launch_at)} (Lagos)` : ''}.`}
+          ? 'The archive is live. Curator-only notes and Sample items are shown only to curators.'
+          : `Published items are shown as Roni will see them${settings ? ` from ${formatInLagos(settings.launch_at)} (Lagos)` : ''}. Anything tagged Sample is placeholder content only curators can see.`}
       </p>
       <Link to="/admin" className="inline-block text-gold underline underline-offset-4 sm:mt-2">
         <span className="sm:hidden">Dashboard</span>

@@ -60,9 +60,11 @@ export function AdminOverview() {
     const { data, error: e } = await supabase.rpc('admin_dashboard_stats')
     if (e) setError('Could not load statistics.')
     else setStats(data as Stats)
-    const published = (table: string) => supabase.from(table).select('*', { count: 'exact', head: true }).eq('is_published', true)
+    // Samples are curator-only, so they never count towards what Roni will see.
+    const published = (table: string) =>
+      supabase.from(table).select('*', { count: 'exact', head: true }).eq('is_published', true).eq('is_sample', false)
     const results = await Promise.all([
-      published('chapters'),
+      supabase.from('chapters').select('*', { count: 'exact', head: true }).eq('is_published', true),
       published('timeline_milestones'),
       published('memories'),
       published('contributor_profiles'),
@@ -126,7 +128,7 @@ export function AdminOverview() {
     setSaving('lock')
     const { error: e } = await supabase.rpc('admin_set_original_lock', { p_locked: locked })
     setSaving(null)
-    if (e) setError('Could not change the lock.')
+    if (e) setError(e.message || 'Could not change the lock.')
     void reloadCollection()
     void load()
   }
@@ -139,6 +141,7 @@ export function AdminOverview() {
         </a>
       </PageTitle>
       {error && <Notice tone="error" className="mb-6">{error}</Notice>}
+      <SampleContent onCleared={() => void load()} />
 
       {!stats ? (
         <Spinner label="Loading…" />
@@ -274,5 +277,69 @@ function SettingRow({
         )}
       </div>
     </div>
+  )
+}
+
+const SAMPLE_TABLES = [
+  'contributors',
+  'memories',
+  'birthday_wishes',
+  'letters',
+  'contributor_profiles',
+  'timeline_milestones',
+  'experience_content',
+  'media_assets',
+] as const
+
+/** Sample content fills the preview before real contributions arrive. Curators only. */
+function SampleContent({ onCleared }: { onCleared: () => void }) {
+  const [count, setCount] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const results = await Promise.all(
+      SAMPLE_TABLES.map((t) => supabase.from(t).select('*', { count: 'exact', head: true }).eq('is_sample', true)),
+    )
+    setCount(results.reduce((sum, r) => sum + (r.count ?? 0), 0))
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const clear = async () => {
+    if (!window.confirm('Remove all sample content? Sample contributors, their submissions, photos, memories, wishes, letters, milestones and sample editorial copy are deleted. Real content is not touched.')) return
+    setBusy(true)
+    setError(null)
+    const { data, error: e } = await supabase.rpc('admin_clear_sample_content')
+    if (e) {
+      setBusy(false)
+      setError(e.message || 'Could not remove the sample content.')
+      return
+    }
+    const files = (data as { files: { bucket: string; path: string }[] }).files
+    const byBucket = new Map<string, string[]>()
+    for (const f of files) byBucket.set(f.bucket, [...(byBucket.get(f.bucket) ?? []), f.path])
+    for (const [bucket, paths] of byBucket)
+      for (let i = 0; i < paths.length; i += 100) await supabase.storage.from(bucket).remove(paths.slice(i, i + 100))
+    setBusy(false)
+    void load()
+    onCleared()
+  }
+
+  if (!count) return null
+  return (
+    <Notice className="mb-8" title="Sample content is in the preview">
+      <p>
+        {count} sample {count === 1 ? 'item fills' : 'items fill'} the experience so you can see every section. Each one is labelled{' '}
+        <strong>Sample</strong> in the preview and in these pages, and only curators can see them: Roni and family never do. Remove them
+        once real contributions are in; the collection cannot be locked until you do.
+      </p>
+      {error && <p className="mt-2 text-danger">{error}</p>}
+      <Button size="sm" variant="danger" className="mt-4" onClick={() => void clear()} loading={busy}>
+        Remove all sample content
+      </Button>
+    </Notice>
   )
 }

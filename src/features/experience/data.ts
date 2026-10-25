@@ -26,6 +26,14 @@ export type ExpMedia = MediaRef & {
   height: number | null
 }
 
+/** Where an item came from. Only loaded for curators, to label the preview. */
+export type Source = {
+  sample: boolean
+  contributor: string | null
+  relationship: string | null
+  contributionId: string | null
+}
+
 export type Chapter = {
   key: ChapterKey
   kicker: string
@@ -46,6 +54,7 @@ export type Milestone = {
   featuredId: string | null
   photoIds: string[]
   memoryIds: string[]
+  source?: Source
 }
 
 export type Memory = {
@@ -60,6 +69,7 @@ export type Memory = {
   attribution: string | null
   featured: boolean
   mediaIds: string[]
+  source?: Source
 }
 
 export type Person = {
@@ -71,9 +81,10 @@ export type Person = {
   portraitId: string | null
   voiceId: string | null
   videoId: string | null
+  source?: Source
 }
 
-export type Wish = { id: string; author: string | null; message: string; star: number | null; final: boolean }
+export type Wish = { id: string; author: string | null; message: string; star: number | null; final: boolean; source?: Source }
 
 export type Letter = {
   id: string
@@ -83,6 +94,7 @@ export type Letter = {
   voiceId: string | null
   photoId: string | null
   featured: boolean
+  source?: Source
 }
 
 export type Experience = {
@@ -98,6 +110,8 @@ export type Experience = {
   times: TimesContent | null
   music: MusicContent | null
   media: Record<string, ExpMedia>
+  /** Editorial slots currently filled with sample copy (curators only). */
+  sampleEditorial: string[]
 }
 
 /** Presentation copy from the brief. Used when a chapter row has not been published. */
@@ -107,6 +121,19 @@ export const CHAPTER_DEFAULTS: Chapter[] = [
   { key: 'finding_her_way', kicker: 'Chapter Three — Finding Her Way', title: 'The woman she became.', period: '2016–2025', description: null, startYear: 2016, endYear: 2025 },
   { key: 'thirty', kicker: 'Chapter Four — Thirty', title: 'The next chapter begins.', period: '2026', description: null, startYear: 2026, endYear: 2026 },
 ]
+
+export const MEMORY_CATEGORIES = [
+  { value: 'childhood', label: 'Childhood' },
+  { value: 'family', label: 'Family' },
+  { value: 'friendship', label: 'Friendship' },
+  { value: 'funny', label: 'Funny moments' },
+  { value: 'milestone', label: 'Milestones' },
+  { value: 'travel', label: 'Travel & adventures' },
+  { value: 'celebration', label: 'Celebrations' },
+  { value: 'reflection', label: 'Reflections' },
+] as const
+
+export const categoryLabel = (value: string) => MEMORY_CATEGORIES.find((c) => c.value === value)?.label ?? value
 
 const MEDIA_COLUMNS = 'id, bucket, storage_path, kind, mime_type, alt_text, caption, transcript, width, height'
 const bySort = (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order
@@ -128,12 +155,18 @@ async function loadMedia(ids: string[]) {
   return out
 }
 
+type SourceRow = { is_sample: boolean; contribution_id?: string | null; contributor_id?: string | null }
+type ContributorName = { full_name: string; relationship: string | null }
+
 /**
  * Loads the published Original Thirty. Row-level security already limits what each viewer
  * may read; the explicit `is_published` filters keep a curator's preview identical to
  * Roni's view, because curators can read drafts too.
+ *
+ * `curator` adds clearly labelled sample content and where each item came from. Samples are
+ * also hidden from everyone else by row-level security.
  */
-export async function loadExperience(): Promise<Experience> {
+export async function loadExperience({ curator = false }: { curator?: boolean } = {}): Promise<Experience> {
   const { data: collection, error: collectionError } = await supabase
     .from('archive_collections')
     .select('id')
@@ -142,47 +175,65 @@ export async function loadExperience(): Promise<Experience> {
   if (collectionError || !collection) throw collectionError ?? new Error('Archive not found')
   const cid = collection.id as string
 
+  const samples = curator ? [true, false] : [false]
+
   const [chapters, milestones, memories, people, wishes, letters, content] = await Promise.all([
     supabase.from('chapters').select('key, kicker, title, period_label, description, start_year, end_year, sort_order').eq('is_published', true),
     supabase
       .from('timeline_milestones')
-      .select('id, chapter, year, age, title, description, featured_media_id, sort_order, milestone_media(media_id, sort_order), milestone_memories(memory_id, sort_order)')
+      .select('id, chapter, year, age, title, description, featured_media_id, sort_order, is_sample, milestone_media(media_id, sort_order), milestone_memories(memory_id, sort_order)')
       .eq('collection_id', cid)
       .eq('is_published', true)
-      .eq('is_sample', false)
+      .in('is_sample', samples)
       .order('year')
       .order('sort_order'),
     supabase
       .from('memories')
-      .select('id, title, story, caption, year, date_precision, chapter, category, attribution, is_featured, sort_order, memory_media(media_id, sort_order)')
+      .select('id, title, story, caption, year, date_precision, chapter, category, attribution, is_featured, sort_order, is_sample, contribution_id, contributor_id, memory_media(media_id, sort_order)')
       .eq('collection_id', cid)
       .eq('is_published', true)
-      .eq('is_sample', false)
+      .in('is_sample', samples)
       .order('sort_order')
       .order('year', { nullsFirst: false }),
     supabase
       .from('contributor_profiles')
-      .select('id, display_name, relationship_label, message, tone, portrait_media_id, voice_media_id, video_media_id')
+      .select('id, display_name, relationship_label, message, tone, portrait_media_id, voice_media_id, video_media_id, is_sample, contributor_id')
       .eq('is_published', true)
+      .in('is_sample', samples)
       .order('sort_order'),
     supabase
       .from('birthday_wishes')
-      .select('id, author_display, message, star_index, is_final_star')
+      .select('id, author_display, message, star_index, is_final_star, is_sample, contribution_id, contributor_id')
       .eq('collection_id', cid)
       .eq('is_published', true)
-      .eq('is_sample', false)
+      .in('is_sample', samples)
       .order('star_index', { nullsFirst: false }),
     supabase
       .from('letters')
-      .select('id, author_display, salutation, body, voice_media_id, photo_media_id, is_featured, sort_order')
+      .select('id, author_display, salutation, body, voice_media_id, photo_media_id, is_featured, sort_order, is_sample, contribution_id, contributor_id')
       .eq('collection_id', cid)
       .eq('is_published', true)
-      .eq('is_sample', false)
+      .in('is_sample', samples)
       .order('sort_order'),
-    supabase.from('experience_content').select('key, content').eq('is_published', true).eq('is_sample', false),
+    supabase.from('experience_content').select('key, content, is_sample').eq('is_published', true).in('is_sample', samples),
   ])
   for (const r of [chapters, milestones, memories, people, wishes, letters, content]) if (r.error) throw r.error
 
+  // Contributors' real names (they may be shown differently, or not at all) are for curators only.
+  const names = new Map<string, ContributorName>()
+  if (curator) {
+    const ids = [...new Set([memories, people, wishes, letters].flatMap((r) => (r.data ?? []).map((x) => x.contributor_id as string | null)))]
+    const { data: rows } = await supabase
+      .from('contributors')
+      .select('id, full_name, relationship')
+      .in('id', ids.filter((x): x is string => Boolean(x)))
+    for (const c of rows ?? []) names.set(c.id as string, c as ContributorName)
+  }
+  const tag = (row: SourceRow): Source | undefined => {
+    if (!curator) return undefined
+    const who = row.contributor_id ? names.get(row.contributor_id) : undefined
+    return { sample: row.is_sample, contributor: who?.full_name ?? null, relationship: who?.relationship ?? null, contributionId: row.contribution_id ?? null }
+  }
   const editorial = new Map((content.data ?? []).map((row) => [row.key as string, row.content as unknown]))
   const opening = editorial.has('opening') ? parseEditorial('opening', editorial.get('opening')) : DEFAULT_OPENING
   const finale = editorial.has('finale') ? parseEditorial('finale', editorial.get('finale')) : DEFAULT_FINALE
@@ -216,6 +267,7 @@ export async function loadExperience(): Promise<Experience> {
     featuredId: m.featured_media_id,
     photoIds: [...(m.milestone_media ?? [])].sort(bySort).map((x) => x.media_id as string),
     memoryIds: [...(m.milestone_memories ?? [])].sort(bySort).map((x) => x.memory_id as string),
+    source: tag(m),
   }))
 
   const memoryList: Memory[] = (memories.data ?? []).map((m) => ({
@@ -230,6 +282,7 @@ export async function loadExperience(): Promise<Experience> {
     attribution: m.attribution,
     featured: m.is_featured,
     mediaIds: [...(m.memory_media ?? [])].sort(bySort).map((x) => x.media_id as string),
+    source: tag(m),
   }))
 
   const peopleList: Person[] = (people.data ?? []).map((p) => ({
@@ -241,6 +294,7 @@ export async function loadExperience(): Promise<Experience> {
     portraitId: p.portrait_media_id,
     voiceId: p.voice_media_id,
     videoId: p.video_media_id,
+    source: tag(p),
   }))
 
   const wishList: Wish[] = (wishes.data ?? []).map((w) => ({
@@ -249,6 +303,7 @@ export async function loadExperience(): Promise<Experience> {
     message: w.message,
     star: w.star_index,
     final: w.is_final_star,
+    source: tag(w),
   }))
 
   const letterList: Letter[] = (letters.data ?? []).map((l) => ({
@@ -259,6 +314,7 @@ export async function loadExperience(): Promise<Experience> {
     voiceId: l.voice_media_id,
     photoId: l.photo_media_id,
     featured: l.is_featured,
+    source: tag(l),
   }))
 
   const mediaIds = [
@@ -284,6 +340,7 @@ export async function loadExperience(): Promise<Experience> {
     times,
     music: music && media[music.mediaId!] ? music : null,
     media,
+    sampleEditorial: (content.data ?? []).filter((row) => row.is_sample).map((row) => row.key as string),
   }
 }
 
@@ -300,13 +357,14 @@ const EMPTY_EXPERIENCE: Experience = {
   times: null,
   music: null,
   media: {},
+  sampleEditorial: [],
 }
 
 // Signed URLs last an hour; refresh well before that for visitors who linger.
 const RESIGN_EVERY_MS = 45 * 60 * 1000
 
 /** `peek` never touches the database, so the public sneak peek cannot reveal any content. */
-export function useExperienceData(peek = false) {
+export function useExperienceData({ peek = false, curator = false }: { peek?: boolean; curator?: boolean } = {}) {
   const [data, setData] = useState<Experience | null>(peek ? EMPTY_EXPERIENCE : null)
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
@@ -314,7 +372,7 @@ export function useExperienceData(peek = false) {
   useEffect(() => {
     if (peek) return
     let active = true
-    loadExperience()
+    loadExperience({ curator })
       .then(async (exp) => {
         const signed = await signMedia(Object.values(exp.media))
         if (!active) return
@@ -325,7 +383,7 @@ export function useExperienceData(peek = false) {
     return () => {
       active = false
     }
-  }, [peek])
+  }, [peek, curator])
 
   useEffect(() => {
     if (!data) return

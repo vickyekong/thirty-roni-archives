@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/cn'
-import { useExperience, type ResolvedMedia } from './data'
+import { useExperience, type ResolvedMedia, type Source } from './data'
 
 export function SectionHeader({
   eyebrow,
@@ -34,6 +34,70 @@ export function SectionHeader({
       </h2>
       {intro && <p className={cn('max-w-xl leading-relaxed', tone === 'paper' ? 'text-midnight/70' : 'text-ivory/70')}>{intro}</p>}
     </motion.header>
+  )
+}
+
+const tagLink = 'underline underline-offset-4 hover:text-gold-bright'
+
+/**
+ * Curator preview only: where an item came from, with links to edit it. Links open in a new
+ * tab so the preview stays where it is.
+ */
+export function SourceTag({
+  source,
+  edit,
+  sample,
+  label,
+  tone = 'dark',
+  className,
+}: {
+  source?: Source
+  edit: string
+  /** For items without a source row (editorial copy). */
+  sample?: boolean
+  /** Overrides the "From …" text. */
+  label?: string
+  tone?: 'dark' | 'paper'
+  className?: string
+}) {
+  const { preview, peek } = useExperience()
+  if (!preview || peek) return null
+  const isSample = sample ?? source?.sample ?? false
+  const from =
+    label ??
+    (source?.contributor
+      ? `From ${source.contributor}${source.relationship ? ` · ${source.relationship}` : ''}`
+      : source?.contributionId
+        ? 'From a contributor'
+        : 'Added by a curator')
+  return (
+    <p
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed px-3 py-2 font-sans text-xs leading-relaxed not-italic',
+        tone === 'paper' ? 'border-midnight/30 text-midnight/75' : 'border-gold/35 text-ivory/70',
+        className,
+      )}
+    >
+      {isSample && (
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 font-medium tracking-[0.15em] uppercase',
+            tone === 'paper' ? 'bg-burgundy/15 text-burgundy' : 'bg-gold/20 text-gold-bright',
+          )}
+        >
+          Sample
+        </span>
+      )}
+      <span>{from}</span>
+      {source?.contributionId && (
+        <Link to={`/admin/submissions?id=${source.contributionId}`} target="_blank" className={tagLink}>
+          View submission
+        </Link>
+      )}
+      <Link to={edit} target="_blank" className={tagLink}>
+        Edit
+      </Link>
+    </p>
   )
 }
 

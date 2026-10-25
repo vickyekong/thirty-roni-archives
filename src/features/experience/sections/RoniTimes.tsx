@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useExperience, useMedia } from '../data'
 import type { TimesStory } from '../editorial'
-import { Photo, PreviewEmpty, SectionHeader } from '../ui'
+import { Photo, PreviewEmpty, SectionHeader, SourceTag } from '../ui'
 
 function Rule() {
   return <hr aria-hidden="true" className="my-6 border-0 border-t border-midnight/25" />
@@ -52,6 +52,13 @@ export function RoniTimes() {
   return (
     <section id="times" aria-labelledby="times-title" className="px-3 py-28 sm:px-6 sm:py-36">
       <div className="mx-auto max-w-6xl rounded-sm bg-[#f3ecdf] px-5 py-10 text-midnight shadow-[0_40px_80px_rgba(0,0,0,0.45)] sm:px-12 sm:py-14">
+        <SourceTag
+          sample={data.sampleEditorial.includes('roni_times')}
+          label="Written by curators in Editorial"
+          edit="/admin/editorial?tab=roni_times"
+          tone="paper"
+          className="mb-6"
+        />
         <header className="text-center">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[0.65rem] tracking-[0.25em] uppercase">
             <span>{times.edition}</span>

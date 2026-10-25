@@ -6,7 +6,7 @@ import {
   type ContributorCategory,
 } from '@shared/contribution'
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/Button'
 import { Notice } from '@/components/ui/Notice'
 import { Spinner } from '@/components/ui/Spinner'
@@ -24,7 +24,7 @@ import {
 } from '../contribute/copy'
 import { StatusBadge } from './AdminContributors'
 import { PageTitle } from './AdminLayout'
-import { Area, Check, Input, Panel } from './kit'
+import { Area, Check, Input, Panel, Pill } from './kit'
 
 type Row = {
   id: string
@@ -36,7 +36,7 @@ type Row = {
   review_notes: string | null
   correction_request: string | null
   submitted_payload: { payload?: unknown; category?: ContributorCategory } | null
-  contributor: { full_name: string; category: ContributorCategory } | null
+  contributor: { full_name: string; category: ContributorCategory; is_sample: boolean } | null
 }
 
 type Removal = {
@@ -82,12 +82,38 @@ const MEMORY_TITLES: Record<keyof typeof MEMORY_QUESTIONS | CategoryQuestionKey,
   nextDecadeHopes: 'Hopes for her next decade',
 }
 
+const MEMORY_CATEGORY: Partial<Record<keyof typeof MEMORY_QUESTIONS | CategoryQuestionKey, string>> = {
+  earliest: 'childhood',
+  birthDay: 'childhood',
+  childhoodPersonality: 'childhood',
+  childhoodMemories: 'childhood',
+  adventures: 'childhood',
+  traditions: 'family',
+  funniest: 'funny',
+  funnyMemories: 'funny',
+  insideJokes: 'funny',
+  milestones: 'milestone',
+  howWeMet: 'friendship',
+  firstImpressions: 'friendship',
+  sharedExperiences: 'friendship',
+  friendshipMoments: 'friendship',
+  unknownFact: 'reflection',
+  lessons: 'reflection',
+  hopes: 'reflection',
+  admireToday: 'reflection',
+  nextDecadeHopes: 'reflection',
+}
+
+const categoryFor = (key: keyof typeof MEMORY_CATEGORY, contributor: ContributorCategory) =>
+  MEMORY_CATEGORY[key] ?? (contributor === 'friend' ? 'friendship' : 'family')
+
 export function AdminSubmissions() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [drafts, setDrafts] = useState(0)
   const [removals, setRemovals] = useState<Removal[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('review')
+  const [params] = useSearchParams()
+  const [selected, setSelected] = useState<string | null>(() => params.get('id'))
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>(() => (params.get('id') ? 'all' : 'review'))
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -95,7 +121,7 @@ export function AdminSubmissions() {
       supabase
         .from('contributions')
         .select(
-          'id, status, submitted_at, suggested_chapter, message_visibility, imported_at, review_notes, correction_request, submitted_payload, contributor:contributors(full_name, category)',
+          'id, status, submitted_at, suggested_chapter, message_visibility, imported_at, review_notes, correction_request, submitted_payload, contributor:contributors(full_name, category, is_sample)',
         )
         .neq('status', 'draft')
         .order('submitted_at', { ascending: false }),
@@ -170,7 +196,10 @@ export function AdminSubmissions() {
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate text-ivory">{row.contributor?.full_name ?? 'Unknown'}</span>
-                    <StatusBadge status={row.status} />
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {row.contributor?.is_sample && <Pill tone="gold">Sample</Pill>}
+                      <StatusBadge status={row.status} />
+                    </span>
                   </span>
                   <span className="text-xs text-grey">
                     {row.submitted_at ? formatInLagos(row.submitted_at, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
@@ -454,7 +483,7 @@ function ReviewPanel({ row, onChange }: { row: Row; onChange: () => void }) {
   )
 }
 
-type DraftMemory = { key: string; include: boolean; title: string; story: string }
+type DraftMemory = { key: keyof typeof MEMORY_CATEGORY; include: boolean; title: string; story: string }
 
 function ImportPanel({
   row,
@@ -510,7 +539,7 @@ function ImportPanel({
     const { data, error: e } = await supabase.rpc('admin_import_contribution', {
       p_contribution_id: row.id,
       p_items: {
-        memories: memories.filter((m) => m.include && m.story.trim()).map((m) => ({ title: m.title, story: m.story, category: m.key })),
+        memories: memories.filter((m) => m.include && m.story.trim()).map((m) => ({ title: m.title, story: m.story, category: categoryFor(m.key, category) })),
         wish,
         letter,
         profile_message: profile,

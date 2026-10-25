@@ -2,8 +2,8 @@ import { motion, useReducedMotion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/cn'
 import { useArchive } from '../archive-context'
-import { CHAPTER_DEFAULTS, useExperience, useMedia, type ChapterKey, type Memory } from '../data'
-import { Dialog, MediaPlayer, Photo, plural, PreviewEmpty, SectionHeader } from '../ui'
+import { categoryLabel, CHAPTER_DEFAULTS, useExperience, useMedia, type ChapterKey, type Memory } from '../data'
+import { Dialog, MediaPlayer, Photo, plural, PreviewEmpty, SectionHeader, SourceTag } from '../ui'
 
 const CHAPTER_LABEL: Record<ChapterKey, string> = {
   beginning: 'The Beginning',
@@ -59,6 +59,7 @@ function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: () => void }) 
           {memory.attribution && <span className="mt-3 block text-sm text-grey">— {memory.attribution}</span>}
         </span>
       </button>
+      <SourceTag source={memory.source} edit={`/admin/stories?edit=${memory.id}`} className="mt-2" />
     </motion.li>
   )
 }
@@ -73,7 +74,7 @@ export function MemoryDialog({ memoryId, onClose }: { memoryId: string | null; o
       {memory && (
         <article>
           <p className="text-xs tracking-[0.25em] text-gold uppercase">
-            {[when(memory), memory.category].filter(Boolean).join(' · ')}
+            {[when(memory), memory.category && categoryLabel(memory.category)].filter(Boolean).join(' · ')}
           </p>
           {items
             .filter((m) => m.kind === 'image')
@@ -93,6 +94,7 @@ export function MemoryDialog({ memoryId, onClose }: { memoryId: string | null; o
               </div>
             ))}
           {memory.attribution && <p className="mt-8 font-serif text-xl text-gold">— {memory.attribution}</p>}
+          <SourceTag source={memory.source} edit={`/admin/stories?edit=${memory.id}`} className="mt-8" />
         </article>
       )}
     </Dialog>
@@ -142,7 +144,7 @@ export function MemoryVault() {
                   </FilterChip>
                   {categories.map((c) => (
                     <FilterChip key={c} active={category === c} onClick={() => setCategory(c)}>
-                      {c}
+                      {categoryLabel(c)}
                     </FilterChip>
                   ))}
                 </div>
@@ -180,6 +182,7 @@ export function MemoryVault() {
                       <span className="font-serif text-xl text-ivory">{m.title}</span>
                       {m.attribution && <span className="text-sm text-grey sm:ml-auto">{m.attribution}</span>}
                     </button>
+                    <SourceTag source={m.source} edit={`/admin/stories?edit=${m.id}`} className="mb-4" />
                   </li>
                 ))}
               </ul>

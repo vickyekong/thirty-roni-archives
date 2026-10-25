@@ -5,7 +5,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/cn'
 import { supabase } from '@/lib/supabase'
 import { PageTitle } from './AdminLayout'
-import { AUDIENCE_OPTIONS, Area, Check, Input, LockedNotice, Panel, Pill, Select, useOriginalCollection, type Audience } from './kit'
+import { AUDIENCE_OPTIONS, Area, Check, Input, LockedNotice, Panel, Pill, Select, useEditParam, useOriginalCollection, type Audience } from './kit'
 
 type Wish = {
   id: string
@@ -17,6 +17,7 @@ type Wish = {
   audience: Audience
   is_published: boolean
   contribution_id: string | null
+  is_sample: boolean
 }
 
 type Arrangement = Record<string, { star: number | null; published: boolean }>
@@ -30,7 +31,7 @@ export function AdminWishes() {
   const [finalId, setFinalId] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [editing, setEditing] = useEditParam(wishes !== null)
   const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
   const locked = Boolean(collection?.is_locked)
 
@@ -38,7 +39,7 @@ export function AdminWishes() {
     if (!collection) return
     const { data } = await supabase
       .from('birthday_wishes')
-      .select('id, author_display, message, is_curator_original, star_index, is_final_star, audience, is_published, contribution_id')
+      .select('id, author_display, message, is_curator_original, star_index, is_final_star, audience, is_published, contribution_id, is_sample')
       .eq('collection_id', collection.id)
       .order('star_index', { nullsFirst: false })
       .order('created_at')
@@ -162,7 +163,7 @@ export function AdminWishes() {
           <ul className="flex flex-col gap-3">
             {wishes.map((w) =>
               editing === w.id && collection ? (
-                <li key={w.id}>
+                <li key={w.id} id={`edit-${w.id}`} className="scroll-mt-24">
                   <WishEditor collectionId={collection.id} wish={w} onDone={() => { setEditing(null); void load() }} />
                 </li>
               ) : (
@@ -171,6 +172,7 @@ export function AdminWishes() {
                     <p className="leading-relaxed text-ivory/90">“{w.message}”</p>
                     <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-grey">
                       <span>{w.author_display ?? 'Anonymous'}</span>
+                      {w.is_sample && <Pill tone="gold">Sample</Pill>}
                       {w.is_curator_original && <Pill tone="gold">Curator</Pill>}
                       {w.audience === 'roni_only' && <Pill>Roni only</Pill>}
                     </p>

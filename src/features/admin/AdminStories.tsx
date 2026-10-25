@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/cn'
 import { useSignedUrls } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
+import { MEMORY_CATEGORIES } from '../experience/data'
 import { PageTitle } from './AdminLayout'
 import { MediaPicker, MediaThumb, loadMediaByIds, type PickerMedia } from './MediaPicker'
 import {
@@ -22,6 +23,7 @@ import {
   Select,
   chapterForYear,
   publishMedia,
+  useEditParam,
   useOriginalCollection,
   type Audience,
   type ChapterKey,
@@ -76,28 +78,19 @@ type Memory = {
   is_published: boolean
   sort_order: number
   contribution_id: string | null
+  is_sample: boolean
   memory_media: { media_id: string; sort_order: number }[]
 }
 
 const MEMORY_SELECT =
-  'id, title, story, caption, year, date_precision, chapter, category, attribution, audience, is_featured, is_published, sort_order, contribution_id, memory_media(media_id, sort_order)'
+  'id, title, story, caption, year, date_precision, chapter, category, attribution, audience, is_featured, is_published, sort_order, contribution_id, is_sample, memory_media(media_id, sort_order)'
 
-const CATEGORY_OPTIONS = [
-  { value: '', label: 'Uncategorised' },
-  { value: 'childhood', label: 'Childhood' },
-  { value: 'family', label: 'Family' },
-  { value: 'friendship', label: 'Friendship' },
-  { value: 'funny', label: 'Funny moments' },
-  { value: 'milestone', label: 'Milestones' },
-  { value: 'travel', label: 'Travel & adventures' },
-  { value: 'celebration', label: 'Celebrations' },
-  { value: 'reflection', label: 'Reflections' },
-]
+const CATEGORY_OPTIONS = [{ value: '', label: 'Uncategorised' }, ...MEMORY_CATEGORIES]
 
 function Memories({ collection }: { collection: OriginalCollection }) {
   const [rows, setRows] = useState<Memory[] | null>(null)
   const [media, setMedia] = useState<Record<string, PickerMedia>>({})
-  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [editing, setEditing] = useEditParam(rows !== null)
   const [chapter, setChapter] = useState<'all' | ChapterKey | 'none'>('all')
 
   const load = useCallback(async () => {
@@ -109,9 +102,10 @@ function Memories({ collection }: { collection: OriginalCollection }) {
       .order('year', { nullsFirst: false })
       .order('sort_order')
     const list = (data ?? []) as Memory[]
-    setRows(list)
+    // Editors copy `media` when they open (also straight from an ?edit= link), so it must be ready first.
     const loaded = await loadMediaByIds([...new Set(list.flatMap((m) => m.memory_media.map((x) => x.media_id)))])
     setMedia(Object.fromEntries(loaded.map((x) => [x.id, x])))
+    setRows(list)
   }, [collection.id])
 
   useEffect(() => {
@@ -147,7 +141,7 @@ function Memories({ collection }: { collection: OriginalCollection }) {
         <ul className="flex flex-col gap-3">
           {visible.map((m) =>
             editing === m.id ? (
-              <li key={m.id}>
+              <li key={m.id} id={`edit-${m.id}`} className="scroll-mt-24">
                 <MemoryEditor collection={collection} memory={m} media={media} onDone={done} />
               </li>
             ) : (
@@ -160,6 +154,7 @@ function Memories({ collection }: { collection: OriginalCollection }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {m.is_sample && <Pill tone="gold">Sample</Pill>}
                   {m.is_featured && <Pill tone="gold">Featured</Pill>}
                   {m.audience === 'roni_only' && <Pill>Roni only</Pill>}
                   {!m.contribution_id && <Pill>Curator</Pill>}
@@ -351,24 +346,25 @@ type Letter = {
   is_published: boolean
   sort_order: number
   contribution_id: string | null
+  is_sample: boolean
 }
 
 function Letters({ collection }: { collection: OriginalCollection }) {
   const [rows, setRows] = useState<Letter[] | null>(null)
   const [media, setMedia] = useState<Record<string, PickerMedia>>({})
-  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [editing, setEditing] = useEditParam(rows !== null)
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('letters')
-      .select('id, author_display, salutation, body, voice_media_id, photo_media_id, audience, is_featured, is_published, sort_order, contribution_id')
+      .select('id, author_display, salutation, body, voice_media_id, photo_media_id, audience, is_featured, is_published, sort_order, contribution_id, is_sample')
       .eq('collection_id', collection.id)
       .order('sort_order')
       .order('created_at')
     const list = (data ?? []) as Letter[]
-    setRows(list)
     const loaded = await loadMediaByIds(list.flatMap((l) => [l.voice_media_id, l.photo_media_id]).filter((x): x is string => Boolean(x)))
     setMedia(Object.fromEntries(loaded.map((x) => [x.id, x])))
+    setRows(list)
   }, [collection.id])
 
   useEffect(() => {
@@ -406,7 +402,7 @@ function Letters({ collection }: { collection: OriginalCollection }) {
         <ol className="flex flex-col gap-3">
           {rows.map((l, i) =>
             editing === l.id ? (
-              <li key={l.id}>
+              <li key={l.id} id={`edit-${l.id}`} className="scroll-mt-24">
                 <LetterEditor collection={collection} letter={l} media={media} onDone={done} />
               </li>
             ) : (
@@ -416,6 +412,7 @@ function Letters({ collection }: { collection: OriginalCollection }) {
                   <p className="truncate text-xs text-grey">{l.body.slice(0, 140)}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {l.is_sample && <Pill tone="gold">Sample</Pill>}
                   {l.is_featured && <Pill tone="gold">Featured</Pill>}
                   {l.voice_media_id && <Pill>Voice</Pill>}
                   {l.audience === 'roni_only' && <Pill>Roni only</Pill>}

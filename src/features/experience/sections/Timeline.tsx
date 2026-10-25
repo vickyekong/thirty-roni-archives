@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { gsap } from '@/lib/gsap'
 import { useArchive } from '../archive-context'
 import { useExperience, useMedia, type Chapter, type Memory, type Milestone } from '../data'
-import { Photo, PreviewEmpty, SectionHeader } from '../ui'
+import { Photo, PreviewEmpty, SectionHeader, SourceTag } from '../ui'
 
 const TINTS: Record<Chapter['key'], string> = {
   beginning: 'rgba(198,166,107,0.10)',
@@ -26,6 +26,7 @@ function MilestoneItem({ m, memories }: { m: Milestone; memories: Memory[] }) {
       {m.age !== null && <p className="mt-1 text-xs tracking-[0.3em] text-grey uppercase">Age {m.age}</p>}
       <h4 className="mt-4 font-serif text-3xl text-ivory">{m.title}</h4>
       {m.description && <p className="mt-3 max-w-prose leading-relaxed whitespace-pre-line text-ivory/75">{m.description}</p>}
+      <SourceTag source={m.source} edit={`/admin/timeline?edit=${m.id}`} className="mt-4 max-w-prose" />
       {featured && (
         <figure className="mt-6 overflow-hidden rounded-2xl border border-ivory/10">
           <Photo media={featured} className="max-h-[70vh]" />

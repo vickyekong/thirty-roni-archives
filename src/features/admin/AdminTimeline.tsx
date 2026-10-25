@@ -14,10 +14,12 @@ import {
   Input,
   LockedNotice,
   Panel,
+  Pill,
   PublishedPill,
   Select,
   chapterForYear,
   publishMedia,
+  useEditParam,
   useOriginalCollection,
   type ChapterKey,
 } from './kit'
@@ -40,6 +42,7 @@ type Milestone = {
   description: string | null
   featured_media_id: string | null
   is_published: boolean
+  is_sample?: boolean
   sort_order: number
   milestone_media: { media_id: string; sort_order: number }[]
   milestone_memories: { memory_id: string; sort_order: number }[]
@@ -53,7 +56,7 @@ export function AdminTimeline() {
   const [milestones, setMilestones] = useState<Milestone[] | null>(null)
   const [memories, setMemories] = useState<MemoryOption[]>([])
   const [media, setMedia] = useState<Record<string, PickerMedia>>({})
-  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [editing, setEditing] = useEditParam(milestones !== null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -62,7 +65,7 @@ export function AdminTimeline() {
       supabase.from('chapters').select('key, kicker, title, period_label, description, is_published').order('sort_order'),
       supabase
         .from('timeline_milestones')
-        .select('id, chapter, year, age, title, description, featured_media_id, is_published, sort_order, milestone_media(media_id, sort_order), milestone_memories(memory_id, sort_order)')
+        .select('id, chapter, year, age, title, description, featured_media_id, is_published, is_sample, sort_order, milestone_media(media_id, sort_order), milestone_memories(memory_id, sort_order)')
         .eq('collection_id', collection.id)
         .order('year')
         .order('sort_order'),
@@ -71,11 +74,11 @@ export function AdminTimeline() {
     if (c.error || m.error) setError('Could not load the timeline.')
     setChapters((c.data ?? []) as Chapter[])
     const rows = (m.data ?? []) as Milestone[]
-    setMilestones(rows)
-    setMemories((mem.data ?? []) as MemoryOption[])
     const ids = [...new Set(rows.flatMap((r) => [r.featured_media_id, ...r.milestone_media.map((x) => x.media_id)]).filter(Boolean) as string[])]
     const loaded = await loadMediaByIds(ids)
     setMedia(Object.fromEntries(loaded.map((x) => [x.id, x])))
+    setMilestones(rows)
+    setMemories((mem.data ?? []) as MemoryOption[])
   }, [collection])
 
   useEffect(() => {
@@ -146,7 +149,7 @@ export function AdminTimeline() {
                   <ol className="mt-4 flex flex-col gap-3">
                     {items.map((m, i) =>
                       editing === m.id && collection ? (
-                        <li key={m.id}>
+                        <li key={m.id} id={`edit-${m.id}`} className="scroll-mt-24">
                           <MilestoneEditor
                             collectionId={collection.id}
                             milestone={m}
@@ -280,6 +283,7 @@ function MilestoneRow({
           {m.milestone_memories.length === 1 ? 'memory' : 'memories'}
         </p>
       </div>
+      {m.is_sample && <Pill tone="gold">Sample</Pill>}
       <PublishedPill published={m.is_published} />
       <div className="flex items-center gap-1">
         <Button size="sm" variant="ghost" aria-label={`Move ${m.title} up`} onClick={() => onMove(-1)} disabled={locked || !canUp}>
