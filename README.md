@@ -124,9 +124,21 @@ Lock the Original Thirty from the overview once curation is final. A curator can
 - **Shared link (easiest):** `/admin/contributors` → *Shared link* → *Create shared link*. Post it (or the ready-made group message) in a private group chat. Each person types their name and how they know Roni, then gets their own draft and a personal link to continue on another device. *Replace link* stops the old link immediately; *Turn off* stops new people joining. Both keep existing drafts.
 - **Personal links:** add a person → *Create link*. The link is shown **once**; copy it into a private message. *Replace link* revokes the old one and keeps the contributor's draft.
 
+## Chapter One (1996–2005)
+
+Chapter One has its own composition in the timeline: an introduction, a family album (one large photo with two smaller ones overlapping it), four moments and a featured letter "From the people who knew her first". Arrange it in **Editorial → Chapter One**:
+
+- **Introduction and moments.** The intro and each moment's year, title and short framing line are editable. Moments can be reordered, hidden, added (up to eight) or removed. The framing lines are editorial wording only; the stories inside each moment are approved memories.
+- **Memories.** Tick memories into a moment to place them in that order. With *Place unassigned Chapter One memories automatically* on, published memories set to Chapter One (or with no chapter, dated 2005 or earlier or themed Childhood) fill in by themselves: 1996 goes to the first moment, family stories to "Home", 2004–2005 to the last and the rest to "Little". Untick one to leave it out of Chapter One; it stays in the Memory Vault. Beginning milestones from Timeline are placed by year.
+- **Photographs.** Choose the three album photos with captions; the featured caption is set as a handwritten note. Empty frames borrow approved photos from the chapter's moments, milestones and memories. With none at all, Roni sees "Every beautiful story has a beginning. Hers is being gathered with love." Moments can also carry their own photos and an optional narration (never autoplayed).
+- **Family letter.** Choose up to three published people cards or letters. With none chosen, or none published with real words, the section is left out for Roni. Nothing is generated.
+- **Preview.** Saving unpublished keeps it as a draft that only appears in your curator preview (tagged "unpublished draft"). Roni sees the published version, or the default wording with automatic arrangement. Publishing also publishes the photos it uses.
+
+Only published, approved, verified content reaches Roni; contributors appear by their approved display name, with the relationship from their published people card.
+
 ## Sample content
 
-The project currently holds **clearly labelled sample content** so every section of the experience can be seen filled in before real contributions arrive: six sample contributors (all named "Sample …"), 13 memories, 6 wishes on stars, 3 letters, 5 people cards, 4 timeline milestones, a sample Roni Times and a sample final message, with placeholder photos that show no people. Every text says it is a placeholder; nothing describes the real Roni.
+The project currently holds **clearly labelled sample content** so every section of the experience can be seen filled in before real contributions arrive: six sample contributors (all named "Sample …"), 13 memories, 6 wishes on stars, 3 letters, 4 timeline milestones, a sample Roni Times and a sample final message, with placeholder photos that show no people. Every text says it is a placeholder; nothing describes the real Roni.
 
 - **Only curators see it.** Rows are flagged `is_sample`, and restrictive policies hide them (and their files) from Roni, family and visitors, before and after launch. "What Roni will see" on the Overview ignores them.
 - **Where things come from.** With *Curator preview* on, every item in the experience carries a dashed tag: who it's from (or "Added by a curator"), a *Sample* chip, *View submission* (the contributor's original words) and *Edit* (opens that exact item in the dashboard, in a new tab). Real contributions get the same tags.
@@ -148,6 +160,7 @@ There is no test data in the project: all QA accounts and test submissions have 
 - **Supabase advisors** report three intentional security warnings: `rate_limits` has RLS with no policies (server-only by design); `experience_access()` is a `SECURITY DEFINER` function callable by anyone (it only returns gate state); `ensure_my_collection()` is `SECURITY DEFINER` and checks the role itself. Performance notes (unindexed `*_by` foreign keys, multiple permissive policies) don't matter at this scale.
 - **Temporary:** the countdown has an *Explore now* button that opens a public sneak peek of the experience. It loads no data at all (every section shows a "Sneak peek · placeholder" card), so it can't reveal contributions. To remove it, drop the `onExplore` prop passed to `GatePage` in `src/features/experience/HomePage.tsx`.
 - The Supabase CLI isn't installed here, so edge functions were deployed through the Supabase MCP. The deployed `contribute` function (version 3) matches `supabase/functions/contribute`.
+- **People cards:** the nine cards (her family and closest friends) are published with placeholder messages. Replace each message in People before launch, or Roni will see the placeholder.
 - Consider turning on *Leaked password protection* (Authentication → Sign In / Providers → Email) for curator and Roni accounts.
 - Lint reports warnings only (mostly `set-state-in-effect` in data-loading effects); no errors.
 - The largest JS chunk is three.js (~245 kB gzipped). It loads only with the birthday experience, not on `/contribute` or `/admin`.

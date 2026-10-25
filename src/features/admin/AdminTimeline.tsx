@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { Button, buttonClasses } from '@/components/ui/Button'
 import { Notice } from '@/components/ui/Notice'
 import { Spinner } from '@/components/ui/Spinner'
@@ -237,7 +238,17 @@ function ChapterEditor({ chapter, locked, onSaved }: { chapter: Chapter; locked:
           <Input label="Kicker" value={draft.kicker ?? ''} onValue={(v) => setDraft({ ...draft, kicker: v })} maxLength={120} />
           <Input label="Period" value={draft.period_label ?? ''} onValue={(v) => setDraft({ ...draft, period_label: v })} maxLength={60} />
           <Input className="sm:col-span-2" label="Title" value={draft.title} onValue={(v) => setDraft({ ...draft, title: v })} maxLength={200} />
-          <Area className="sm:col-span-2" label="Introduction" hint="Optional short paragraph shown when the chapter opens." value={draft.description ?? ''} onValue={(v) => setDraft({ ...draft, description: v })} maxLength={4000} rows={2} />
+          {chapter.key === 'beginning' ? (
+            <p className="text-sm leading-relaxed text-grey sm:col-span-2">
+              Chapter One’s introduction, photographs, moments and family letters are arranged in{' '}
+              <Link to="/admin/editorial?tab=chapter_one" className="text-gold underline-offset-4 hover:underline">
+                Editorial → Chapter One
+              </Link>
+              .
+            </p>
+          ) : (
+            <Area className="sm:col-span-2" label="Introduction" hint="Optional short paragraph shown when the chapter opens." value={draft.description ?? ''} onValue={(v) => setDraft({ ...draft, description: v })} maxLength={4000} rows={2} />
+          )}
           <Check label="Published" hint="Unpublished chapters still appear with their default title, but without this introduction." checked={draft.is_published} onChecked={(v) => setDraft({ ...draft, is_published: v })} />
           {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
           <div className="sm:col-span-2">

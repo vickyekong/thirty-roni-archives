@@ -4,6 +4,7 @@ import { gsap } from '@/lib/gsap'
 import { useArchive } from '../archive-context'
 import { useExperience, useMedia, type Chapter, type Memory, type Milestone } from '../data'
 import { Photo, PreviewEmpty, SectionHeader, SourceTag } from '../ui'
+import { ChapterOne } from './ChapterOne'
 
 const TINTS: Record<Chapter['key'], string> = {
   beginning: 'rgba(198,166,107,0.10)',
@@ -143,8 +144,9 @@ export function Timeline() {
   const root = useRef<HTMLElement>(null)
   const reduce = useReducedMotion()
 
+  // Chapter One always opens the timeline: its editorial introduction stands even before memories arrive.
   const visible = data.chapters.filter(
-    (c) => preview || data.milestones.some((m) => m.chapter === c.key) || data.memories.some((m) => m.chapter === c.key),
+    (c) => c.key === 'beginning' || preview || data.milestones.some((m) => m.chapter === c.key) || data.memories.some((m) => m.chapter === c.key),
   )
 
   useLayoutEffect(() => {
@@ -179,9 +181,13 @@ export function Timeline() {
           intro="Four chapters, from the beginning to the next one."
         />
       </div>
-      {visible.map((c) => (
-        <ChapterBlock key={c.key} chapter={c} milestones={data.milestones.filter((m) => m.chapter === c.key)} memories={data.memories} />
-      ))}
+      {visible.map((c) =>
+        c.key === 'beginning' ? (
+          <ChapterOne key={c.key} chapter={c} milestones={data.milestones.filter((m) => m.chapter === c.key)} />
+        ) : (
+          <ChapterBlock key={c.key} chapter={c} milestones={data.milestones.filter((m) => m.chapter === c.key)} memories={data.memories} />
+        ),
+      )}
     </section>
   )
 }

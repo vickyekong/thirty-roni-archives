@@ -2,12 +2,14 @@ import { createContext, use, useCallback, useEffect, useState } from 'react'
 import { signMedia, type MediaRef } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
 import {
+  DEFAULT_CHAPTER_ONE,
   DEFAULT_FINALE,
   DEFAULT_MUSIC,
   DEFAULT_OPENING,
   DEFAULT_TIMES,
   parseEditorial,
   timesHasStories,
+  type ChapterOneContent,
   type FinaleContent,
   type MusicContent,
   type OpeningContent,
@@ -69,11 +71,13 @@ export type Memory = {
   attribution: string | null
   featured: boolean
   mediaIds: string[]
+  contributorId: string | null
   source?: Source
 }
 
 export type Person = {
   id: string
+  contributorId: string
   name: string
   relationship: string | null
   message: string | null
@@ -94,6 +98,7 @@ export type Letter = {
   voiceId: string | null
   photoId: string | null
   featured: boolean
+  contributorId: string | null
   source?: Source
 }
 
@@ -109,6 +114,9 @@ export type Experience = {
   /** Null when the Roni Times is unpublished or has nothing written in it. */
   times: TimesContent | null
   music: MusicContent | null
+  chapterOne: ChapterOneContent
+  /** Curators preview Chapter One's saved-but-unpublished arrangement; everyone else gets the published one or the defaults. */
+  chapterOneDraft: boolean
   media: Record<string, ExpMedia>
   /** Editorial slots currently filled with sample copy (curators only). */
   sampleEditorial: string[]
@@ -138,19 +146,24 @@ export const categoryLabel = (value: string) => MEMORY_CATEGORIES.find((c) => c.
 const MEDIA_COLUMNS = 'id, bucket, storage_path, kind, mime_type, alt_text, caption, transcript, width, height'
 const bySort = (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order
 
-async function loadMedia(ids: string[]) {
-  const unique = [...new Set(ids)]
+/**
+ * Published + verified only, so a curator's preview shows exactly what Roni will see.
+ * `draftIds` (curators only) may be unpublished: they belong to a draft the curator is previewing.
+ */
+async function loadMedia(ids: string[], draftIds: string[] = []) {
   const out: Record<string, ExpMedia> = {}
-  for (let i = 0; i < unique.length; i += 100) {
-    // Published + verified only, so a curator's preview shows exactly what Roni will see.
-    const { data, error } = await supabase
-      .from('media_assets')
-      .select(MEDIA_COLUMNS)
-      .in('id', unique.slice(i, i + 100))
-      .eq('is_published', true)
-      .eq('status', 'verified')
-    if (error) throw error
-    for (const m of (data ?? []) as ExpMedia[]) out[m.id] = m
+  const batches: [string[], boolean][] = [
+    [[...new Set(ids)], true],
+    [[...new Set(draftIds)].filter((id) => !ids.includes(id)), false],
+  ]
+  for (const [unique, publishedOnly] of batches) {
+    for (let i = 0; i < unique.length; i += 100) {
+      let query = supabase.from('media_assets').select(MEDIA_COLUMNS).in('id', unique.slice(i, i + 100)).eq('status', 'verified')
+      if (publishedOnly) query = query.eq('is_published', true)
+      const { data, error } = await query
+      if (error) throw error
+      for (const m of (data ?? []) as ExpMedia[]) out[m.id] = m
+    }
   }
   return out
 }
@@ -177,7 +190,7 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
 
   const samples = curator ? [true, false] : [false]
 
-  const [chapters, milestones, memories, people, wishes, letters, content] = await Promise.all([
+  const [chapters, milestones, memories, people, wishes, letters, content, chapterOneRow] = await Promise.all([
     supabase.from('chapters').select('key, kicker, title, period_label, description, start_year, end_year, sort_order').eq('is_published', true),
     supabase
       .from('timeline_milestones')
@@ -216,8 +229,11 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
       .in('is_sample', samples)
       .order('sort_order'),
     supabase.from('experience_content').select('key, content, is_sample').eq('is_published', true).in('is_sample', samples),
+    curator
+      ? supabase.from('experience_content').select('content, is_published').eq('key', 'chapter_one').maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ])
-  for (const r of [chapters, milestones, memories, people, wishes, letters, content]) if (r.error) throw r.error
+  for (const r of [chapters, milestones, memories, people, wishes, letters, content, chapterOneRow]) if (r.error) throw r.error
 
   // Contributors' real names (they may be shown differently, or not at all) are for curators only.
   const names = new Map<string, ContributorName>()
@@ -241,6 +257,12 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
   const times = rawTimes && timesHasStories(rawTimes) ? { ...DEFAULT_TIMES, ...rawTimes } : null
   const rawMusic = editorial.has('music') ? parseEditorial('music', editorial.get('music')) : DEFAULT_MUSIC
   const music = rawMusic.mediaId ? rawMusic : null
+  const chapterOneDraft = Boolean(chapterOneRow.data && !chapterOneRow.data.is_published)
+  const chapterOne = chapterOneDraft
+    ? parseEditorial('chapter_one', chapterOneRow.data!.content)
+    : editorial.has('chapter_one')
+      ? parseEditorial('chapter_one', editorial.get('chapter_one'))
+      : DEFAULT_CHAPTER_ONE
 
   const publishedChapters = new Map((chapters.data ?? []).map((c) => [c.key as ChapterKey, c]))
   const chapterList: Chapter[] = CHAPTER_DEFAULTS.map((d) => {
@@ -282,11 +304,13 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
     attribution: m.attribution,
     featured: m.is_featured,
     mediaIds: [...(m.memory_media ?? [])].sort(bySort).map((x) => x.media_id as string),
+    contributorId: m.contributor_id,
     source: tag(m),
   }))
 
   const peopleList: Person[] = (people.data ?? []).map((p) => ({
     id: p.id,
+    contributorId: p.contributor_id,
     name: p.display_name,
     relationship: p.relationship_label,
     message: p.message,
@@ -314,6 +338,7 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
     voiceId: l.voice_media_id,
     photoId: l.photo_media_id,
     featured: l.is_featured,
+    contributorId: l.contributor_id,
     source: tag(l),
   }))
 
@@ -326,7 +351,11 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
     ...(times ? [...times.familyMemories, ...times.friendshipChronicles, ...times.photoFeatures].map((s) => s.mediaId) : []),
     music?.mediaId,
   ].filter((x): x is string => Boolean(x))
-  const media = await loadMedia(mediaIds)
+  const chapterOneMedia = [
+    ...chapterOne.album.map((a) => a.mediaId),
+    ...chapterOne.moments.flatMap((m) => [...m.mediaIds, m.narrationId]),
+  ].filter((x): x is string => Boolean(x))
+  const media = chapterOneDraft ? await loadMedia(mediaIds, chapterOneMedia) : await loadMedia([...mediaIds, ...chapterOneMedia])
 
   return {
     chapters: chapterList,
@@ -339,6 +368,8 @@ export async function loadExperience({ curator = false }: { curator?: boolean } 
     finale,
     times,
     music: music && media[music.mediaId!] ? music : null,
+    chapterOne,
+    chapterOneDraft,
     media,
     sampleEditorial: (content.data ?? []).filter((row) => row.is_sample).map((row) => row.key as string),
   }
@@ -356,6 +387,8 @@ const EMPTY_EXPERIENCE: Experience = {
   finale: DEFAULT_FINALE,
   times: null,
   music: null,
+  chapterOne: DEFAULT_CHAPTER_ONE,
+  chapterOneDraft: false,
   media: {},
   sampleEditorial: [],
 }

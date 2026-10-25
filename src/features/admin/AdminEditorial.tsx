@@ -1,15 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/Button'
 import { Notice } from '@/components/ui/Notice'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/cn'
-import { useSignedUrls } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
 import {
   EDITORIAL,
   parseEditorial,
+  type ChapterOneContent,
   type EditorialKey,
   type FinaleContent,
   type MusicContent,
@@ -17,12 +17,15 @@ import {
   type TimesContent,
   type TimesStory,
 } from '../experience/editorial'
+import { ChapterOneEditor, chapterOneMediaIds } from './AdminChapterOne'
 import { PageTitle } from './AdminLayout'
-import { MediaPicker, MediaThumb, loadMediaByIds, type PickerMedia } from './MediaPicker'
+import { type PickerMedia } from './MediaPicker'
+import { MediaSlot, Section, useKnownMedia } from './editorial-kit'
 import { Area, Check, Input, LockedNotice, MakeRealCheck, makeReal, Panel, PublishedPill, moveItem, publishMedia, useOriginalCollection } from './kit'
 
 const TABS: { key: EditorialKey; label: string }[] = [
   { key: 'opening', label: 'Opening' },
+  { key: 'chapter_one', label: 'Chapter One' },
   { key: 'roni_times', label: 'The Roni Times' },
   { key: 'finale', label: 'Finale' },
   { key: 'music', label: 'Music' },
@@ -132,11 +135,18 @@ function EditorialSlot({ slot, locked }: { slot: EditorialKey; locked: boolean }
       {slot === 'finale' && <FinaleEditor value={content as FinaleContent} onChange={onChange} />}
       {slot === 'roni_times' && <TimesEditor value={content as TimesContent} onChange={onChange} />}
       {slot === 'music' && <MusicEditor value={content as MusicContent} onChange={onChange} />}
+      {slot === 'chapter_one' && <ChapterOneEditor value={content as ChapterOneContent} onChange={onChange} />}
       {sample && <MakeRealCheck kind="editorial" checked={real} onChecked={setReal} />}
       <Panel className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-4 bg-midnight/95 backdrop-blur">
         <Check
           label="Published"
-          hint={slot === 'opening' || slot === 'finale' ? 'Unpublished, the experience falls back to the default wording.' : 'Unpublished sections are left out of the birthday experience.'}
+          hint={
+            slot === 'chapter_one'
+              ? 'Unpublished, Roni sees the default wording and automatic arrangement. Your saved draft shows in your own preview.'
+              : slot === 'opening' || slot === 'finale'
+                ? 'Unpublished, the experience falls back to the default wording.'
+                : 'Unpublished sections are left out of the birthday experience.'
+          }
           checked={published}
           onChecked={(v) => {
             setPublished(v)
@@ -156,19 +166,10 @@ function EditorialSlot({ slot, locked }: { slot: EditorialKey; locked: boolean }
 
 function mediaIdsIn(slot: EditorialKey, data: unknown): (string | null)[] {
   if (slot === 'music') return [(data as MusicContent).mediaId]
+  if (slot === 'chapter_one') return chapterOneMediaIds(data as ChapterOneContent)
   if (slot !== 'roni_times') return []
   const t = data as TimesContent
   return [t.coverStory.mediaId, ...t.familyMemories.map((s) => s.mediaId), ...t.friendshipChronicles.map((s) => s.mediaId), ...t.photoFeatures.map((p) => p.mediaId)]
-}
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <Panel>
-      <h2 className="font-serif text-2xl">{title}</h2>
-      {hint && <p className="mt-1 text-sm leading-relaxed text-grey">{hint}</p>}
-      <div className="mt-5 flex flex-col gap-4">{children}</div>
-    </Panel>
-  )
 }
 
 function LinesEditor({ label, lines, onChange, max, maxLength = 200 }: { label: string; lines: string[]; onChange: (l: string[]) => void; max: number; maxLength?: number }) {
@@ -215,47 +216,6 @@ function FinaleEditor({ value, onChange }: { value: FinaleContent; onChange: (v:
         <Input label="Signed" hint="e.g. “With love, everyone who wrote to you”" value={value.finalSignature} onValue={(v) => onChange({ ...value, finalSignature: v })} maxLength={160} />
       </Section>
     </>
-  )
-}
-
-function useKnownMedia(ids: (string | null)[]) {
-  const [known, setKnown] = useState<Record<string, PickerMedia>>({})
-  const key = ids.filter(Boolean).sort().join(',')
-  useEffect(() => {
-    const missing = ids.filter((id): id is string => Boolean(id) && !known[id!])
-    if (!missing.length) return
-    void loadMediaByIds(missing).then((list) => setKnown((k) => ({ ...k, ...Object.fromEntries(list.map((m) => [m.id, m])) })))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the id list
-  }, [key])
-  return { known, remember: (m: PickerMedia) => setKnown((k) => ({ ...k, [m.id]: m })) }
-}
-
-function MediaSlot({
-  label,
-  mediaId,
-  known,
-  onPick,
-  kinds = ['image'],
-}: {
-  label: string
-  mediaId: string | null
-  known: Record<string, PickerMedia>
-  onPick: (m: PickerMedia | null) => void
-  kinds?: PickerMedia['kind'][]
-}) {
-  const [open, setOpen] = useState(false)
-  const m = mediaId ? known[mediaId] : undefined
-  const urls = useSignedUrls(m?.kind === 'image' ? [m] : null)
-  return (
-    <div>
-      <p className="mb-1 text-sm text-ivory">{label}</p>
-      {m ? <MediaThumb media={m} url={urls[m.id]} className="w-24" /> : <p className="text-sm text-grey">None</p>}
-      <div className="mt-2 flex gap-1">
-        <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>Choose</Button>
-        {m && <Button size="sm" variant="ghost" onClick={() => onPick(null)}>Clear</Button>}
-      </div>
-      <MediaPicker open={open} kinds={kinds} onClose={() => setOpen(false)} onPick={onPick} />
-    </div>
   )
 }
 
