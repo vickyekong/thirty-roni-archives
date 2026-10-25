@@ -13,6 +13,8 @@ import {
   Check,
   Input,
   LockedNotice,
+  MakeRealCheck,
+  makeReal,
   Panel,
   Pill,
   PublishedPill,
@@ -329,6 +331,7 @@ function MilestoneEditor({
   )
   const [published, setPublished] = useState(milestone?.is_published ?? false)
   const [known, setKnown] = useState(media)
+  const [real, setReal] = useState(false)
   const [picker, setPicker] = useState<'featured' | 'photos' | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -379,6 +382,10 @@ function MilestoneEditor({
     ])
     if (mm.error || mmem.error) return fail('Saved, but some attachments could not be linked.')
     if (published) await publishMedia([featured, ...photos])
+    if (real) {
+      const message = await makeReal('milestone', id)
+      if (message) return fail(message)
+    }
     setBusy(false)
     onDone()
   }
@@ -482,6 +489,7 @@ function MilestoneEditor({
       <div className="mt-6">
         <Check label="Published" hint="Visible to Roni after launch. Attached photos are published with it." checked={published} onChecked={setPublished} />
       </div>
+      {milestone?.is_sample && <MakeRealCheck kind="milestone" checked={real} onChecked={setReal} />}
       {error && <Notice tone="error" className="mt-4">{error}</Notice>}
       <div className="mt-6 flex flex-wrap gap-2">
         <Button onClick={() => void save()} loading={busy}>

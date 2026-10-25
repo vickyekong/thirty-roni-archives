@@ -5,7 +5,21 @@ import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/cn'
 import { supabase } from '@/lib/supabase'
 import { PageTitle } from './AdminLayout'
-import { AUDIENCE_OPTIONS, Area, Check, Input, LockedNotice, Panel, Pill, Select, useEditParam, useOriginalCollection, type Audience } from './kit'
+import {
+  AUDIENCE_OPTIONS,
+  Area,
+  Check,
+  Input,
+  LockedNotice,
+  MakeRealCheck,
+  makeReal,
+  Panel,
+  Pill,
+  Select,
+  useEditParam,
+  useOriginalCollection,
+  type Audience,
+} from './kit'
 
 type Wish = {
   id: string
@@ -253,6 +267,7 @@ function WishEditor({ collectionId, wish, onDone }: { collectionId: string; wish
   const [text, setText] = useState(wish?.message ?? '')
   const [audience, setAudience] = useState<Audience>(wish?.audience ?? 'everyone')
   const [published, setPublished] = useState(wish?.is_published ?? false)
+  const [real, setReal] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -263,8 +278,13 @@ function WishEditor({ collectionId, wish, onDone }: { collectionId: string; wish
     const { error: e } = wish
       ? await supabase.from('birthday_wishes').update(row).eq('id', wish.id)
       : await supabase.from('birthday_wishes').insert({ ...row, collection_id: collectionId, is_curator_original: true })
+    if (e) {
+      setBusy(false)
+      return setError('Could not save the wish.')
+    }
+    const message = real && wish ? await makeReal('wish', wish.id) : null
     setBusy(false)
-    if (e) setError('Could not save the wish.')
+    if (message) setError(message)
     else onDone()
   }
 
@@ -288,6 +308,7 @@ function WishEditor({ collectionId, wish, onDone }: { collectionId: string; wish
         <Select label="Who can see it" value={audience} onValue={setAudience} options={[...AUDIENCE_OPTIONS]} />
         <Check label="Published" checked={published} onChecked={setPublished} />
       </div>
+      {wish?.is_sample && <MakeRealCheck kind="wish" checked={real} onChecked={setReal} />}
       {error && <Notice tone="error" className="mt-4">{error}</Notice>}
       <div className="mt-6 flex flex-wrap gap-2">
         <Button onClick={() => void save()} loading={busy}>Save</Button>

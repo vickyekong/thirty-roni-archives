@@ -17,6 +17,8 @@ import {
   Check,
   Input,
   LockedNotice,
+  MakeRealCheck,
+  makeReal,
   Panel,
   Pill,
   PublishedPill,
@@ -201,6 +203,7 @@ function MemoryEditor({
     [...(memory?.memory_media ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((x) => x.media_id),
   )
   const [known, setKnown] = useState(media)
+  const [real, setReal] = useState(false)
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -247,6 +250,10 @@ function MemoryEditor({
       if (e) return fail('Saved, but the media could not be attached.')
     }
     if (d.published) await publishMedia(attached)
+    if (real) {
+      const message = await makeReal('memory', id)
+      if (message) return fail(message)
+    }
     setBusy(false)
     onDone()
   }
@@ -304,6 +311,7 @@ function MemoryEditor({
       <div className="mt-6">
         <Check label="Published" hint="Visible in the birthday experience after launch. Attached media is published with it." checked={d.published} onChecked={(v) => set({ published: v })} />
       </div>
+      {memory?.is_sample && <MakeRealCheck kind="memory" checked={real} onChecked={setReal} />}
       {error && <Notice tone="error" className="mt-4">{error}</Notice>}
       <div className="mt-6 flex flex-wrap gap-2">
         <Button onClick={() => void save()} loading={busy}>
@@ -458,6 +466,7 @@ function LetterEditor({
     published: letter?.is_published ?? false,
   })
   const [known, setKnown] = useState(media)
+  const [real, setReal] = useState(false)
   const [picker, setPicker] = useState<'voice' | 'photo' | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -493,6 +502,11 @@ function LetterEditor({
       return setError('Could not save the letter.')
     }
     if (d.published) await publishMedia([d.voice, d.photo])
+    if (real && letter) {
+      const message = await makeReal('letter', letter.id)
+      setBusy(false)
+      if (message) return setError(message)
+    }
     setBusy(false)
     onDone()
   }
@@ -535,6 +549,7 @@ function LetterEditor({
           <Check label="Published" checked={d.published} onChecked={(v) => set({ published: v })} />
         </div>
       </div>
+      {letter?.is_sample && <MakeRealCheck kind="letter" checked={real} onChecked={setReal} />}
       {error && <Notice tone="error" className="mt-4">{error}</Notice>}
       <div className="mt-6 flex flex-wrap gap-2">
         <Button onClick={() => void save()} loading={busy}>Save</Button>

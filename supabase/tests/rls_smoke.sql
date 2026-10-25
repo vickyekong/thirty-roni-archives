@@ -63,6 +63,15 @@ exception when others then
   insert into t_results (test, pass, detail) values (p_test, not pg_temp.is_test_bug(sqlstate), sqlstate || ' ' || sqlerrm);
 end $$;
 
+-- The error message p_sql raises, or null when it succeeds.
+create function pg_temp.error_of(p_sql text) returns text language plpgsql as $$
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  return sqlerrm;
+end $$;
+
 create function pg_temp.check(p_test text, p_ok boolean, p_detail text) returns void language sql as $$
   insert into t_results (test, pass, detail) values (p_test, coalesce(p_ok, false), p_detail)
 $$;
@@ -146,6 +155,9 @@ insert into public.experience_content (key, content, is_published, is_sample) va
 insert into public.media_assets (bucket, storage_path, kind, purpose, status, mime_type, collection_id, is_published, is_sample) values
   ('archive', 'original/rls/sample.jpg', 'image', 'curated', 'verified', 'image/jpeg', pg_temp.id('original'), true, true);
 insert into storage.objects (bucket_id, name) values ('archive', 'original/rls/sample.jpg');
+insert into public.memory_media (memory_id, media_id, sort_order)
+  select m.id, a.id, 0 from public.memories m, public.media_assets a
+   where m.title = 'rls: sample memory' and a.storage_path = 'original/rls/sample.jpg';
 select pg_temp.check('samples: flag inherited from a sample contributor',
   (select is_sample from public.memories where title = 'rls: sample memory')
     and (select is_sample from public.birthday_wishes where message = 'rls: sample wish')
@@ -181,6 +193,7 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-000000000004","r
 select pg_temp.rows('no role: cannot read contributors', 'select full_name from public.contributors', 0);
 select pg_temp.rows('no role: cannot read memories', 'select title from public.memories', 0);
 select pg_temp.blocked('no role: cannot clear sample content', 'select public.admin_clear_sample_content()');
+select pg_temp.blocked('no role: cannot turn samples into real content', $$select public.admin_make_real('editorial', 'rls_test.sample')$$);
 select pg_temp.blocked('no role: cannot create invitations', format('select * from public.admin_create_invitation(%L, 30)', pg_temp.id('contributor')));
 select pg_temp.blocked('no role: cannot self-grant admin', $$insert into public.user_roles (user_id, role) values ('a0000000-0000-4000-8000-000000000004', 'admin')$$);
 select pg_temp.untouched('no role: cannot change launch settings', 'update public.site_settings set experience_active = true');
@@ -404,6 +417,14 @@ select pg_temp.allowed('admin: arranges wishes on stars', format($$select public
   (select id from public.birthday_wishes where message = 'rls: wish published')));
 select pg_temp.rows('admin: star assignment saved', $$select message from public.birthday_wishes where message = 'rls: wish published' and star_index = 1$$, 1);
 select pg_temp.blocked('admin: cannot lock while sample content exists', 'select public.admin_set_original_lock(true)');
+select pg_temp.check('admin: sample photos must go before an item becomes real',
+  (select pg_temp.error_of(format($$select public.admin_make_real('memory', %L)$$, (select id from public.memories where title = 'rls: sample memory')))) like 'Remove the sample photos%',
+  'refused for its photo');
+update public.birthday_wishes set message = 'rls: rewritten wish' where message = 'rls: sample wish';
+select pg_temp.allowed('admin: a rewritten sample becomes real curator content', format($$select public.admin_make_real('wish', %L)$$,
+  (select id from public.birthday_wishes where message = 'rls: rewritten wish')));
+select pg_temp.rows('admin: real wish is detached from the sample person',
+  $$select message from public.birthday_wishes where message = 'rls: rewritten wish' and not is_sample and contributor_id is null and is_curator_original$$, 1);
 select pg_temp.check('admin: clearing samples returns their files',
   public.admin_clear_sample_content() -> 'files' @> '[{"bucket":"archive","path":"original/rls/sample.jpg"}]'::jsonb, 'sample.jpg listed');
 select pg_temp.check('admin: no sample content remains', not private.sample_content_exists(), 'all removed');

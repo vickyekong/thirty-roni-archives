@@ -19,7 +19,7 @@ import {
 } from '../experience/editorial'
 import { PageTitle } from './AdminLayout'
 import { MediaPicker, MediaThumb, loadMediaByIds, type PickerMedia } from './MediaPicker'
-import { Area, Check, Input, LockedNotice, Panel, PublishedPill, moveItem, publishMedia, useOriginalCollection } from './kit'
+import { Area, Check, Input, LockedNotice, MakeRealCheck, makeReal, Panel, PublishedPill, moveItem, publishMedia, useOriginalCollection } from './kit'
 
 const TABS: { key: EditorialKey; label: string }[] = [
   { key: 'opening', label: 'Opening' },
@@ -63,6 +63,8 @@ function EditorialSlot({ slot, locked }: { slot: EditorialKey; locked: boolean }
   const [content, setContent] = useState<unknown>(null)
   const [published, setPublished] = useState(false)
   const [exists, setExists] = useState(false)
+  const [sample, setSample] = useState(false)
+  const [real, setReal] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
 
@@ -70,13 +72,14 @@ function EditorialSlot({ slot, locked }: { slot: EditorialKey; locked: boolean }
     let active = true
     void supabase
       .from('experience_content')
-      .select('content, is_published')
+      .select('content, is_published, is_sample')
       .eq('key', slot)
       .maybeSingle()
       .then(({ data }) => {
         if (!active) return
         setContent(parseEditorial(slot, data?.content))
         setPublished(data?.is_published ?? false)
+        setSample(data?.is_sample ?? false)
         setExists(Boolean(data))
       })
     return () => {
@@ -89,21 +92,25 @@ function EditorialSlot({ slot, locked }: { slot: EditorialKey; locked: boolean }
     if (!parsed.success) return setMessage({ tone: 'error', text: 'Some fields are too long.' })
     setBusy(true)
     setMessage(null)
+    // is_sample is left out so saving keeps a sample a sample; only "Make this real" clears it.
     const { error } = await supabase.from('experience_content').upsert({
       key: slot,
       content: parsed.data,
       is_published: published,
-      is_sample: false,
       updated_at: new Date().toISOString(),
       updated_by: auth.user?.id ?? null,
     })
     if (!error && published) await publishMedia(mediaIdsIn(slot, parsed.data))
+    const realError = !error && sample && real ? await makeReal('editorial', slot) : null
     setBusy(false)
-    if (error) setMessage({ tone: 'error', text: locked ? 'The Original Thirty is locked.' : 'Could not save.' })
-    else {
-      setExists(true)
-      setMessage({ tone: 'success', text: published ? 'Saved and published.' : 'Saved as a draft.' })
+    if (error) return setMessage({ tone: 'error', text: locked ? 'The Original Thirty is locked.' : 'Could not save.' })
+    setExists(true)
+    if (realError) return setMessage({ tone: 'error', text: realError })
+    if (sample && real) {
+      setSample(false)
+      setReal(false)
     }
+    setMessage({ tone: 'success', text: published ? 'Saved and published.' : 'Saved as a draft.' })
   }
 
   if (content === null) return <Spinner label="Loading…" />
@@ -125,6 +132,7 @@ function EditorialSlot({ slot, locked }: { slot: EditorialKey; locked: boolean }
       {slot === 'finale' && <FinaleEditor value={content as FinaleContent} onChange={onChange} />}
       {slot === 'roni_times' && <TimesEditor value={content as TimesContent} onChange={onChange} />}
       {slot === 'music' && <MusicEditor value={content as MusicContent} onChange={onChange} />}
+      {sample && <MakeRealCheck kind="editorial" checked={real} onChecked={setReal} />}
       <Panel className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-4 bg-midnight/95 backdrop-blur">
         <Check
           label="Published"

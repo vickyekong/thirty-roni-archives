@@ -6,7 +6,21 @@ import { useSignedUrls } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
 import { PageTitle } from './AdminLayout'
 import { MediaPicker, MediaThumb, loadMediaByIds, type PickerMedia } from './MediaPicker'
-import { Area, Check, Input, LockedNotice, Panel, Pill, PublishedPill, Select, publishMedia, useEditParam, useOriginalCollection } from './kit'
+import {
+  Area,
+  Check,
+  Input,
+  LockedNotice,
+  MakeRealCheck,
+  makeReal,
+  Panel,
+  Pill,
+  PublishedPill,
+  Select,
+  publishMedia,
+  useEditParam,
+  useOriginalCollection,
+} from './kit'
 
 type Profile = {
   id: string
@@ -157,6 +171,7 @@ function ProfileEditor({
     published: profile?.is_published ?? false,
   })
   const [known, setKnown] = useState(media)
+  const [real, setReal] = useState(false)
   const [picker, setPicker] = useState<'portrait' | 'voice' | 'video' | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,7 +209,9 @@ function ProfileEditor({
       return setError('Could not save.')
     }
     if (d.published) await publishMedia([d.portrait, d.voice, d.video])
+    const message = real && profile ? await makeReal('person', profile.id) : null
     setBusy(false)
+    if (message) return setError(message)
     onDone()
   }
 
@@ -255,6 +272,7 @@ function ProfileEditor({
         {mediaRow('video', 'Video message')}
         <Check label="Published" hint="Media attached here is published with the card." checked={d.published} onChecked={(v) => set({ published: v })} />
       </div>
+      {profile?.is_sample && <MakeRealCheck kind="person" checked={real} onChecked={setReal} />}
       {error && <Notice tone="error" className="mt-4">{error}</Notice>}
       <div className="mt-6 flex flex-wrap gap-2">
         <Button onClick={() => void save()} loading={busy}>Save</Button>

@@ -231,6 +231,41 @@ export async function publishMedia(ids: (string | null | undefined)[]) {
   await supabase.from('media_assets').update({ is_published: true }).in('id', list)
 }
 
+export type SampleKind = 'memory' | 'wish' | 'letter' | 'person' | 'milestone' | 'editorial'
+
+const MAKE_REAL_HINT: Record<SampleKind, string> = {
+  memory: 'It becomes a memory you added as a curator, no longer linked to the sample person, so set the attribution to who it is really from.',
+  wish: 'It becomes a wish you added as a curator, no longer linked to the sample person, so set the name to who it is really from.',
+  letter: 'It becomes a letter you added as a curator, no longer linked to the sample person, so set who it is from.',
+  person: 'A real person record is created under the name above. You can invite them from Contributors later.',
+  milestone: 'Your edits are kept when the samples are removed.',
+  editorial: 'Your edits are kept when the samples are removed.',
+}
+
+/** Shown in the editor of a sample item. When ticked, saving also turns the item into real content. */
+export function MakeRealCheck({ kind, checked, onChecked }: { kind: SampleKind; checked: boolean; onChecked: (value: boolean) => void }) {
+  return (
+    <div className="mt-6 rounded-xl border border-dashed border-gold/40 p-4">
+      <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-grey">
+        <Pill tone="gold">Sample</Pill>
+        Only curators see this, and it is deleted with the other samples.
+      </p>
+      <Check
+        label="Make this real content when I save"
+        hint={`${MAKE_REAL_HINT[kind]} Roni sees it once it is published. Replace the placeholder wording and remove any sample photos first.`}
+        checked={checked}
+        onChecked={onChecked}
+      />
+    </div>
+  )
+}
+
+/** Returns an error message, or null when the item is now real content. */
+export async function makeReal(kind: SampleKind, id: string): Promise<string | null> {
+  const { error } = await supabase.rpc('admin_make_real', { p_kind: kind, p_id: id })
+  return error ? `Your changes were saved, but it is still a sample: ${error.message}.` : null
+}
+
 export function moveItem<T>(list: T[], index: number, delta: number): T[] {
   const target = index + delta
   if (target < 0 || target >= list.length) return list
