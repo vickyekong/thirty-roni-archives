@@ -9,6 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+
+# Personal photos and notes waiting to be imported. Never commit: the repo is public.
+content-inbox/*
+!content-inbox/README.md
+!content-inbox/notes-template.md
 dist-ssr
 *.local
 
