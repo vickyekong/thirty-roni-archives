@@ -14,7 +14,7 @@ type Props = { access: ExperienceAccess; onLaunch?: () => void; onExplore?: () =
 
 export function GatePage({ access, onLaunch, onExplore }: Props) {
   const auth = useAuth()
-  const { settings } = useSiteSettings()
+  const { settings, error } = useSiteSettings()
   const countdown = useCountdown(settings?.launch_at ?? null)
   const reduce = useReducedMotion()
   const fade = (delay: number) => ({
@@ -76,7 +76,13 @@ export function GatePage({ access, onLaunch, onExplore }: Props) {
 
         <motion.div {...fade(0.9)} className="mt-14 w-full">
           {!settings ? (
-            <div className="h-28" aria-hidden="true" />
+            <div className="grid h-28 place-items-center">
+              {error && (
+                <p role="status" className="animate-pulse text-xs tracking-[0.25em] text-grey uppercase">
+                  Connecting to the archive…
+                </p>
+              )}
+            </div>
           ) : countdown && !countdown.done ? (
             <LiquidGlass
               glass={{ borderRadius: 28, tintOpacity: 0.1, shadow: '0 30px 60px rgba(0,0,0,0.35)' }}

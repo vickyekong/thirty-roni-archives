@@ -19,18 +19,29 @@ export function useSiteSettings() {
 
   useEffect(() => {
     let active = true
-    void supabase
-      .from('site_settings')
-      .select('launch_at, timezone, experience_active, contributions_open, family_access_enabled, preview_enabled')
-      .eq('id', 1)
-      .single()
-      .then(({ data, error: e }) => {
-        if (!active) return
-        if (e || !data) setError('Could not load the launch schedule.')
-        else setSettings(data as SiteSettings)
-      })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // The database can be briefly unreachable (e.g. waking up), so keep trying with a growing delay.
+    const load = (attempt: number) => {
+      void supabase
+        .from('site_settings')
+        .select('launch_at, timezone, experience_active, contributions_open, family_access_enabled, preview_enabled')
+        .eq('id', 1)
+        .single()
+        .then(({ data, error: e }) => {
+          if (!active) return
+          if (e || !data) {
+            setError('Could not load the launch schedule.')
+            timer = setTimeout(() => load(attempt + 1), Math.min(30_000, 2_000 * 2 ** attempt))
+          } else {
+            setError(null)
+            setSettings(data as SiteSettings)
+          }
+        })
+    }
+    load(0)
     return () => {
       active = false
+      clearTimeout(timer)
     }
   }, [])
 
