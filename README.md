@@ -161,6 +161,7 @@ There is no test data in the project: all QA accounts and test submissions have 
 - **Temporary:** the countdown has an *Explore now* button that opens a public sneak peek of the experience. It loads no data at all (every section shows a "Sneak peek · placeholder" card), so it can't reveal contributions. To remove it, drop the `onExplore` prop passed to `GatePage` in `src/features/experience/HomePage.tsx`.
 - The Supabase CLI isn't installed here, so edge functions were deployed through the Supabase MCP. The deployed `contribute` function (version 3) matches `supabase/functions/contribute`.
 - **People cards:** the nine cards (her family and closest friends) are published with placeholder messages. Replace each message in People before launch, or Roni will see the placeholder.
+- **Free-plan pause:** Supabase pauses the database after about a week with no activity, which leaves the countdown on "Connecting to the archive…". `.github/workflows/keep-awake.yml` asks for the public launch schedule once a day so the project stays awake. It needs the `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` repository secrets (the same public values as `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`).
 - Consider turning on *Leaked password protection* (Authentication → Sign In / Providers → Email) for curator and Roni accounts.
 - Lint reports warnings only (mostly `set-state-in-effect` in data-loading effects); no errors.
 - The largest JS chunk is three.js (~245 kB gzipped). It loads only with the birthday experience, not on `/contribute` or `/admin`.
